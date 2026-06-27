@@ -1,6 +1,1001 @@
 home_team,away_team,home_goals,away_goals
-Argentina,France,3,3
-Spain,Brazil,2,1
-England,Croatia,4,2
-Germany,Curacao,7,1
-Portugal,Uzbekistan,5,0
+Real Madrid,Manchester City,4,3
+LAFC,Liverpool,0,2
+Manchester City,Argentina,0,0
+Atletico Madrid,AC Milan,3,1
+LAFC,Liverpool,0,3
+Real Madrid,Bayern Munich,2,3
+Atletico Madrid,Juventus,5,3
+France,Barcelona,2,1
+Juventus,Arsenal,0,5
+Manchester City,Marseille,0,0
+Marseille,Inter Milan,2,4
+Manchester City,Argentina,4,5
+Real Madrid,Barcelona,1,1
+Marseille,Juventus,1,0
+LAFC,Argentina,3,0
+Liverpool,Seattle Sounders,2,3
+Seattle Sounders,Manchester City,3,0
+Inter Miami,Barcelona,0,2
+Argentina,France,1,3
+PSG,Bayern Munich,4,4
+Liverpool,Bayern Munich,3,2
+Juventus,Inter Miami,3,0
+Atletico Madrid,Marseille,5,1
+Barcelona,Manchester City,4,4
+Brazil,Seattle Sounders,1,3
+Borussia Dortmund,Real Madrid,2,2
+Liverpool,France,1,1
+Marseille,Argentina,3,5
+England,France,1,5
+Atletico Madrid,Chelsea,2,5
+Arsenal,Chelsea,1,4
+France,Inter Milan,4,3
+Real Madrid,Liverpool,1,0
+Inter Miami,LAFC,1,1
+England,AC Milan,2,2
+Inter Milan,Manchester City,3,4
+Marseille,Barcelona,2,1
+Real Madrid,Borussia Dortmund,3,4
+Barcelona,AC Milan,4,3
+Brazil,Barcelona,1,2
+Marseille,AC Milan,0,2
+Inter Milan,Manchester City,0,3
+Marseille,Inter Miami,1,0
+France,Inter Miami,1,5
+Marseille,France,1,4
+Chelsea,Bayern Munich,4,1
+Marseille,Atletico Madrid,0,4
+Barcelona,Inter Milan,1,5
+Chelsea,Argentina,3,3
+Inter Milan,LAFC,0,4
+Seattle Sounders,England,3,3
+Liverpool,Bayern Munich,5,2
+Bayern Munich,Seattle Sounders,1,0
+Atletico Madrid,Arsenal,3,2
+Chelsea,Juventus,5,5
+Argentina,AC Milan,3,4
+Barcelona,Bayern Munich,1,2
+Chelsea,Inter Milan,1,5
+Bayern Munich,Atletico Madrid,4,3
+France,Juventus,5,5
+Brazil,Inter Miami,1,5
+France,Chelsea,4,3
+AC Milan,England,2,3
+Chelsea,Barcelona,5,0
+Marseille,Liverpool,3,0
+Manchester City,Juventus,4,3
+Brazil,France,3,0
+Barcelona,Seattle Sounders,0,1
+Liverpool,France,3,5
+Atletico Madrid,Manchester City,5,5
+AC Milan,LAFC,3,2
+LAFC,Real Madrid,3,1
+Brazil,Marseille,1,1
+Marseille,Juventus,5,1
+Borussia Dortmund,Inter Miami,4,4
+PSG,Brazil,5,3
+Liverpool,LAFC,5,4
+Bayern Munich,Borussia Dortmund,0,4
+Chelsea,Marseille,5,2
+Manchester City,Real Madrid,4,2
+AC Milan,Liverpool,3,2
+Bayern Munich,Manchester City,5,5
+Real Madrid,Manchester City,2,4
+Chelsea,England,1,4
+Inter Miami,Atletico Madrid,1,0
+PSG,Juventus,1,0
+Manchester City,Chelsea,0,4
+Inter Miami,Brazil,5,1
+Inter Milan,Juventus,1,1
+LAFC,Real Madrid,1,5
+Real Madrid,Chelsea,4,0
+Atletico Madrid,England,5,5
+Inter Miami,Juventus,5,0
+Real Madrid,Juventus,2,2
+AC Milan,PSG,2,5
+AC Milan,LAFC,3,5
+Arsenal,Barcelona,0,1
+Chelsea,France,5,3
+France,Real Madrid,2,2
+France,Manchester City,0,2
+Brazil,Arsenal,5,5
+Arsenal,Barcelona,1,4
+PSG,Marseille,5,0
+Atletico Madrid,Liverpool,1,1
+PSG,Brazil,4,5
+Seattle Sounders,AC Milan,4,4
+France,Bayern Munich,2,3
+France,Atletico Madrid,2,4
+Atletico Madrid,England,5,2
+Inter Milan,Borussia Dortmund,2,2
+Marseille,France,3,0
+Juventus,Real Madrid,3,1
+Manchester City,Brazil,3,2
+Chelsea,Marseille,1,0
+Manchester City,Juventus,2,3
+AC Milan,Borussia Dortmund,1,2
+Inter Milan,Chelsea,0,4
+Brazil,Seattle Sounders,5,5
+Manchester City,PSG,0,4
+Bayern Munich,LAFC,0,3
+Brazil,Inter Miami,3,0
+Real Madrid,France,5,5
+Atletico Madrid,Barcelona,5,4
+Marseille,AC Milan,4,4
+Liverpool,Manchester City,4,5
+Seattle Sounders,Real Madrid,5,5
+Chelsea,Seattle Sounders,5,2
+Real Madrid,LAFC,0,1
+Juventus,France,4,3
+AC Milan,Barcelona,5,3
+Chelsea,Brazil,2,0
+Juventus,Barcelona,5,2
+Liverpool,England,0,0
+Marseille,England,1,3
+Juventus,Bayern Munich,1,1
+Atletico Madrid,Inter Miami,5,1
+AC Milan,Argentina,1,0
+Seattle Sounders,Chelsea,0,3
+Juventus,Inter Milan,3,4
+AC Milan,Argentina,1,5
+Atletico Madrid,Inter Miami,2,2
+Liverpool,Real Madrid,4,0
+Borussia Dortmund,Bayern Munich,4,3
+Arsenal,Atletico Madrid,3,4
+Inter Miami,Arsenal,0,0
+Borussia Dortmund,AC Milan,5,3
+Liverpool,Atletico Madrid,0,4
+PSG,Manchester City,1,5
+Marseille,Liverpool,3,2
+Manchester City,PSG,1,1
+Borussia Dortmund,Bayern Munich,1,5
+Chelsea,Arsenal,1,5
+Bayern Munich,Liverpool,3,2
+Liverpool,Seattle Sounders,4,1
+Chelsea,PSG,2,0
+Liverpool,Argentina,4,1
+England,Manchester City,3,4
+Barcelona,Seattle Sounders,4,4
+Marseille,England,0,0
+Barcelona,Real Madrid,3,1
+PSG,Marseille,5,2
+Liverpool,Borussia Dortmund,5,3
+Seattle Sounders,Atletico Madrid,3,2
+Marseille,Real Madrid,4,3
+Marseille,Atletico Madrid,5,1
+Arsenal,England,0,3
+Real Madrid,France,1,1
+Seattle Sounders,England,5,5
+Borussia Dortmund,Bayern Munich,1,1
+Chelsea,Real Madrid,3,3
+Inter Milan,AC Milan,0,0
+France,Juventus,2,5
+Marseille,France,5,5
+Seattle Sounders,Juventus,4,2
+Argentina,Manchester City,1,5
+Marseille,England,4,5
+Brazil,Real Madrid,2,4
+Brazil,Real Madrid,3,5
+Inter Milan,Liverpool,2,3
+Brazil,Borussia Dortmund,3,1
+Seattle Sounders,Real Madrid,1,4
+Manchester City,Arsenal,0,5
+AC Milan,Seattle Sounders,3,1
+France,Marseille,3,2
+AC Milan,Manchester City,4,1
+Barcelona,Chelsea,1,2
+Argentina,Liverpool,3,2
+Arsenal,Juventus,4,4
+Bayern Munich,Inter Milan,2,0
+Real Madrid,Brazil,4,2
+Atletico Madrid,Juventus,1,0
+France,Chelsea,3,4
+Manchester City,Inter Milan,5,5
+AC Milan,Real Madrid,1,2
+France,LAFC,5,2
+LAFC,Chelsea,5,4
+Inter Milan,Liverpool,2,1
+Liverpool,Argentina,3,5
+Real Madrid,France,4,5
+Chelsea,England,1,3
+Barcelona,Atletico Madrid,5,3
+AC Milan,Inter Miami,3,3
+Barcelona,Arsenal,4,5
+LAFC,Brazil,4,2
+Borussia Dortmund,Inter Milan,3,4
+Atletico Madrid,Borussia Dortmund,0,1
+Chelsea,Marseille,3,4
+Arsenal,Chelsea,1,0
+England,Inter Miami,3,2
+Juventus,PSG,4,1
+Brazil,England,4,5
+Argentina,Atletico Madrid,4,1
+PSG,AC Milan,1,4
+Brazil,Atletico Madrid,1,3
+Liverpool,LAFC,2,3
+Liverpool,England,4,5
+Atletico Madrid,LAFC,2,2
+Atletico Madrid,Inter Miami,0,1
+Inter Milan,Arsenal,1,3
+AC Milan,Argentina,2,5
+Borussia Dortmund,France,2,2
+England,Bayern Munich,4,1
+Real Madrid,Argentina,1,5
+AC Milan,England,4,1
+France,Borussia Dortmund,5,1
+Real Madrid,Chelsea,2,5
+France,Seattle Sounders,1,1
+AC Milan,Bayern Munich,0,2
+Atletico Madrid,Inter Miami,4,5
+Brazil,AC Milan,1,5
+England,France,4,0
+Inter Milan,Atletico Madrid,2,5
+Marseille,France,3,3
+PSG,LAFC,5,4
+France,Bayern Munich,5,2
+Manchester City,Juventus,5,2
+Real Madrid,Juventus,5,4
+Barcelona,Real Madrid,2,1
+AC Milan,Juventus,4,5
+Inter Miami,Liverpool,3,3
+Arsenal,Argentina,5,2
+LAFC,France,2,4
+PSG,France,0,3
+Marseille,Liverpool,5,5
+Barcelona,Marseille,4,5
+Liverpool,Chelsea,2,3
+Argentina,Atletico Madrid,5,0
+PSG,Atletico Madrid,2,2
+Inter Miami,Argentina,3,1
+Seattle Sounders,Barcelona,5,1
+Barcelona,Brazil,3,3
+Argentina,Atletico Madrid,0,4
+Inter Milan,AC Milan,1,4
+Arsenal,Seattle Sounders,2,4
+Brazil,Juventus,0,4
+Brazil,Liverpool,2,0
+England,Arsenal,4,0
+Atletico Madrid,PSG,5,2
+Seattle Sounders,Brazil,5,0
+Manchester City,Atletico Madrid,5,3
+Marseille,AC Milan,5,2
+France,Liverpool,5,3
+Seattle Sounders,AC Milan,2,4
+Liverpool,AC Milan,1,1
+Argentina,Manchester City,2,1
+France,LAFC,4,1
+Brazil,AC Milan,4,0
+Liverpool,Real Madrid,3,5
+AC Milan,Inter Miami,1,0
+Argentina,Inter Miami,2,3
+AC Milan,Arsenal,4,5
+Seattle Sounders,France,0,4
+AC Milan,Real Madrid,1,1
+Brazil,Real Madrid,2,2
+Marseille,AC Milan,1,2
+Manchester City,Juventus,5,5
+Borussia Dortmund,AC Milan,4,2
+Marseille,Chelsea,4,0
+Argentina,Arsenal,4,2
+Argentina,Real Madrid,1,4
+Barcelona,AC Milan,4,5
+Inter Milan,Borussia Dortmund,0,5
+Real Madrid,England,3,4
+Borussia Dortmund,Inter Miami,3,2
+Seattle Sounders,Argentina,4,2
+PSG,Atletico Madrid,3,1
+Juventus,Brazil,4,1
+England,Chelsea,2,3
+Arsenal,Brazil,4,4
+Arsenal,LAFC,4,4
+Liverpool,Borussia Dortmund,4,4
+Bayern Munich,AC Milan,3,2
+Seattle Sounders,Liverpool,5,1
+Manchester City,Chelsea,4,2
+England,Argentina,2,4
+Inter Miami,LAFC,4,1
+England,Argentina,1,4
+Bayern Munich,Inter Miami,0,3
+Bayern Munich,Barcelona,0,4
+Inter Milan,Borussia Dortmund,4,2
+Inter Miami,Arsenal,2,4
+Borussia Dortmund,Real Madrid,0,0
+LAFC,Atletico Madrid,2,2
+Real Madrid,Marseille,4,2
+Arsenal,Chelsea,4,5
+PSG,Real Madrid,3,2
+Manchester City,Liverpool,0,5
+Liverpool,France,0,2
+Chelsea,Manchester City,0,3
+Manchester City,Inter Milan,0,0
+Barcelona,LAFC,1,1
+Arsenal,Real Madrid,5,0
+France,Argentina,3,3
+Atletico Madrid,Argentina,1,3
+Atletico Madrid,Arsenal,4,2
+AC Milan,Manchester City,3,5
+Liverpool,Atletico Madrid,2,2
+Barcelona,Bayern Munich,0,4
+Chelsea,Manchester City,1,0
+PSG,Borussia Dortmund,4,3
+PSG,Seattle Sounders,5,5
+Borussia Dortmund,LAFC,3,1
+Manchester City,Seattle Sounders,2,5
+Real Madrid,Barcelona,0,2
+Chelsea,Marseille,1,2
+Inter Milan,Arsenal,0,5
+Liverpool,Real Madrid,4,3
+LAFC,Juventus,2,4
+Borussia Dortmund,Chelsea,3,3
+Barcelona,Atletico Madrid,3,0
+Bayern Munich,Manchester City,5,3
+England,Borussia Dortmund,0,2
+LAFC,France,1,5
+Manchester City,Seattle Sounders,0,3
+Inter Milan,Juventus,3,2
+Chelsea,Arsenal,4,5
+PSG,Manchester City,3,0
+Manchester City,Liverpool,4,1
+Marseille,Juventus,2,2
+PSG,AC Milan,3,4
+Juventus,Manchester City,0,2
+LAFC,Marseille,5,1
+England,France,2,2
+France,Inter Miami,0,5
+Borussia Dortmund,Juventus,5,5
+Bayern Munich,Liverpool,4,2
+Argentina,Bayern Munich,0,2
+Seattle Sounders,Marseille,0,2
+LAFC,Inter Milan,3,5
+Juventus,France,3,0
+Argentina,Barcelona,0,0
+Juventus,AC Milan,5,4
+Chelsea,France,2,2
+Juventus,France,5,4
+France,Liverpool,3,2
+Chelsea,Brazil,3,4
+LAFC,Marseille,0,0
+Brazil,Arsenal,4,5
+Inter Miami,AC Milan,3,4
+AC Milan,Juventus,2,1
+France,Argentina,4,3
+England,AC Milan,1,3
+Juventus,Manchester City,4,1
+Liverpool,Juventus,3,2
+Borussia Dortmund,Barcelona,4,4
+PSG,Arsenal,2,4
+LAFC,Manchester City,5,1
+Juventus,Marseille,1,2
+Juventus,AC Milan,3,3
+Argentina,France,1,1
+Inter Miami,Chelsea,1,3
+PSG,Inter Milan,5,5
+England,Barcelona,5,2
+Inter Milan,Bayern Munich,3,1
+Borussia Dortmund,Barcelona,3,1
+Marseille,Atletico Madrid,2,4
+Bayern Munich,Argentina,4,0
+Atletico Madrid,LAFC,3,4
+Real Madrid,Barcelona,3,0
+Brazil,Borussia Dortmund,1,0
+AC Milan,Inter Milan,3,5
+Marseille,Brazil,5,0
+AC Milan,Arsenal,5,1
+Borussia Dortmund,LAFC,2,2
+Borussia Dortmund,Inter Milan,1,4
+England,Barcelona,1,1
+Liverpool,LAFC,0,2
+Liverpool,PSG,4,2
+LAFC,Bayern Munich,2,1
+Bayern Munich,Inter Miami,5,2
+France,Chelsea,5,3
+Brazil,England,3,0
+Atletico Madrid,Chelsea,4,5
+Inter Miami,AC Milan,2,3
+Borussia Dortmund,Argentina,1,5
+Inter Miami,Real Madrid,2,4
+Arsenal,Marseille,0,1
+Brazil,Chelsea,2,5
+Chelsea,France,2,3
+Chelsea,Marseille,3,1
+Real Madrid,Atletico Madrid,2,5
+Real Madrid,Argentina,5,5
+LAFC,Manchester City,2,4
+Real Madrid,Inter Miami,4,0
+PSG,France,1,1
+Atletico Madrid,Juventus,3,1
+Real Madrid,AC Milan,1,0
+France,Argentina,2,4
+Atletico Madrid,Argentina,5,4
+France,Liverpool,4,3
+Brazil,PSG,0,1
+Barcelona,Seattle Sounders,2,3
+Brazil,Liverpool,0,4
+Barcelona,Borussia Dortmund,2,4
+PSG,Real Madrid,1,5
+Seattle Sounders,Real Madrid,1,3
+Inter Milan,Inter Miami,5,4
+Marseille,Liverpool,1,2
+Barcelona,Manchester City,2,3
+Liverpool,PSG,1,3
+Chelsea,Manchester City,2,0
+Juventus,Argentina,3,5
+Chelsea,France,2,3
+Brazil,Manchester City,5,1
+Bayern Munich,Inter Miami,3,3
+France,Atletico Madrid,3,2
+AC Milan,Real Madrid,0,5
+England,Chelsea,4,3
+AC Milan,Liverpool,1,0
+Barcelona,Bayern Munich,3,2
+LAFC,Barcelona,1,3
+Inter Miami,Inter Milan,5,1
+Inter Miami,Manchester City,5,2
+Argentina,Borussia Dortmund,0,5
+Liverpool,Barcelona,5,1
+Inter Milan,Inter Miami,0,0
+Marseille,Barcelona,3,4
+Real Madrid,Inter Miami,2,1
+Liverpool,England,0,0
+England,France,2,5
+Liverpool,Barcelona,4,2
+Arsenal,Barcelona,5,0
+Chelsea,Seattle Sounders,2,4
+England,Atletico Madrid,5,0
+France,Arsenal,2,4
+LAFC,Chelsea,2,4
+Inter Miami,Argentina,1,5
+Borussia Dortmund,Brazil,4,1
+LAFC,Liverpool,2,1
+England,Manchester City,4,3
+England,AC Milan,5,1
+Barcelona,Manchester City,1,1
+Real Madrid,AC Milan,1,4
+France,England,1,4
+Chelsea,Seattle Sounders,2,1
+PSG,Brazil,4,1
+Liverpool,PSG,1,5
+Inter Milan,Barcelona,0,3
+Bayern Munich,Liverpool,0,0
+Liverpool,Marseille,2,2
+Juventus,Manchester City,4,0
+Seattle Sounders,PSG,2,0
+Borussia Dortmund,AC Milan,4,1
+Inter Milan,Argentina,0,1
+Brazil,Chelsea,2,0
+Chelsea,PSG,2,1
+Atletico Madrid,Real Madrid,4,0
+Liverpool,Argentina,0,2
+Bayern Munich,Atletico Madrid,5,1
+Argentina,Atletico Madrid,4,0
+Manchester City,PSG,4,2
+Arsenal,France,3,0
+France,Chelsea,1,1
+Liverpool,Seattle Sounders,1,1
+Atletico Madrid,PSG,0,5
+Brazil,LAFC,0,2
+Marseille,Real Madrid,4,1
+Borussia Dortmund,Marseille,0,5
+Inter Milan,Real Madrid,5,4
+Inter Milan,Manchester City,0,5
+Barcelona,Chelsea,1,1
+Chelsea,Barcelona,1,5
+Seattle Sounders,LAFC,0,3
+Seattle Sounders,France,5,4
+Atletico Madrid,England,3,0
+Inter Miami,Borussia Dortmund,1,3
+AC Milan,Argentina,4,0
+Bayern Munich,LAFC,1,1
+Marseille,Argentina,4,0
+LAFC,Manchester City,5,5
+Inter Miami,Marseille,2,1
+Marseille,Liverpool,5,4
+PSG,Brazil,4,3
+Barcelona,Seattle Sounders,2,0
+France,Liverpool,5,2
+Liverpool,Manchester City,5,0
+AC Milan,PSG,4,2
+Marseille,LAFC,4,0
+Barcelona,Marseille,1,1
+LAFC,France,5,4
+France,Seattle Sounders,0,3
+Marseille,PSG,1,3
+France,Marseille,4,0
+France,PSG,3,1
+Bayern Munich,Chelsea,5,3
+PSG,Inter Miami,0,3
+AC Milan,Seattle Sounders,3,2
+LAFC,France,3,3
+Seattle Sounders,France,3,3
+Borussia Dortmund,Liverpool,3,0
+LAFC,France,5,3
+Juventus,Borussia Dortmund,0,2
+Seattle Sounders,Borussia Dortmund,4,0
+Argentina,Marseille,5,4
+France,LAFC,2,2
+Inter Miami,Seattle Sounders,1,5
+Inter Miami,Real Madrid,3,2
+Liverpool,France,4,0
+England,Brazil,3,3
+Juventus,France,0,4
+Marseille,Real Madrid,0,0
+France,Argentina,0,0
+LAFC,Argentina,2,4
+Argentina,Liverpool,0,4
+Atletico Madrid,France,0,2
+England,Brazil,4,0
+AC Milan,PSG,1,3
+AC Milan,Inter Milan,0,2
+Borussia Dortmund,Chelsea,4,3
+Bayern Munich,Barcelona,5,5
+France,Barcelona,5,3
+Real Madrid,LAFC,1,1
+Manchester City,England,1,5
+Marseille,Bayern Munich,2,0
+Atletico Madrid,Juventus,0,3
+France,Marseille,5,5
+Seattle Sounders,Real Madrid,3,0
+Barcelona,LAFC,1,3
+Arsenal,Manchester City,5,1
+Juventus,Liverpool,2,1
+Juventus,Argentina,5,0
+Seattle Sounders,Inter Milan,5,1
+Marseille,AC Milan,1,1
+Chelsea,Seattle Sounders,3,2
+Bayern Munich,Juventus,4,0
+Manchester City,Chelsea,3,3
+Borussia Dortmund,Marseille,4,3
+Atletico Madrid,Bayern Munich,1,0
+Arsenal,Argentina,5,5
+Borussia Dortmund,Chelsea,0,1
+England,Manchester City,3,3
+PSG,Inter Milan,2,0
+Marseille,France,0,5
+Atletico Madrid,Juventus,2,1
+PSG,AC Milan,0,4
+Liverpool,Real Madrid,2,4
+Arsenal,Inter Miami,3,3
+Real Madrid,Seattle Sounders,4,4
+LAFC,Liverpool,1,0
+Bayern Munich,Inter Milan,2,3
+Inter Milan,Seattle Sounders,3,3
+Brazil,Juventus,3,5
+Barcelona,Inter Milan,0,0
+Brazil,Liverpool,0,1
+Barcelona,England,5,5
+Inter Milan,Borussia Dortmund,5,5
+Brazil,Inter Miami,3,0
+France,Barcelona,0,1
+Arsenal,PSG,2,3
+LAFC,Chelsea,2,4
+Seattle Sounders,Juventus,5,5
+Brazil,France,1,3
+PSG,Real Madrid,1,5
+Chelsea,Arsenal,2,2
+Barcelona,Marseille,4,5
+Liverpool,Borussia Dortmund,0,4
+PSG,Barcelona,1,5
+Real Madrid,France,2,1
+Inter Miami,AC Milan,5,0
+Argentina,Borussia Dortmund,2,1
+England,AC Milan,0,2
+LAFC,Inter Miami,3,4
+Real Madrid,Inter Miami,3,3
+Atletico Madrid,France,0,4
+Manchester City,LAFC,5,3
+Argentina,PSG,1,0
+Chelsea,Inter Milan,0,2
+Chelsea,AC Milan,1,5
+Brazil,Arsenal,0,3
+Brazil,Liverpool,2,0
+PSG,Seattle Sounders,1,3
+Inter Miami,LAFC,0,1
+Manchester City,Chelsea,0,1
+LAFC,France,3,5
+PSG,Inter Milan,1,1
+Marseille,France,1,0
+Inter Miami,Argentina,0,5
+Real Madrid,AC Milan,3,5
+Real Madrid,Juventus,0,1
+LAFC,AC Milan,3,0
+Atletico Madrid,Argentina,5,4
+Marseille,Manchester City,3,5
+LAFC,Real Madrid,4,3
+PSG,AC Milan,4,2
+Inter Milan,France,0,0
+AC Milan,Inter Miami,5,2
+Arsenal,PSG,2,2
+France,Arsenal,4,2
+Argentina,Marseille,4,3
+Seattle Sounders,Chelsea,5,4
+England,Barcelona,5,5
+Barcelona,Arsenal,5,5
+Bayern Munich,Marseille,4,3
+LAFC,Argentina,3,5
+England,Bayern Munich,3,2
+Real Madrid,Bayern Munich,3,2
+Atletico Madrid,Juventus,4,4
+Marseille,LAFC,3,1
+LAFC,Inter Miami,0,0
+Barcelona,Inter Miami,1,1
+Atletico Madrid,England,0,4
+Arsenal,Inter Miami,1,3
+Borussia Dortmund,Chelsea,0,4
+Arsenal,England,3,0
+Seattle Sounders,Barcelona,3,0
+Liverpool,France,0,4
+Atletico Madrid,Argentina,4,4
+Atletico Madrid,Argentina,5,5
+Inter Miami,Seattle Sounders,1,1
+England,Borussia Dortmund,2,1
+Bayern Munich,Chelsea,3,2
+England,Barcelona,0,1
+Atletico Madrid,Inter Milan,2,2
+Manchester City,Atletico Madrid,4,5
+Marseille,Real Madrid,0,3
+Atletico Madrid,Brazil,1,0
+Inter Miami,England,5,4
+Real Madrid,Marseille,5,5
+France,Borussia Dortmund,5,1
+Liverpool,Bayern Munich,3,1
+Chelsea,Inter Miami,3,3
+Borussia Dortmund,PSG,4,4
+Argentina,Bayern Munich,5,3
+Barcelona,Seattle Sounders,1,5
+Chelsea,AC Milan,0,1
+Juventus,Argentina,4,1
+PSG,Inter Miami,2,5
+Chelsea,Borussia Dortmund,4,1
+Borussia Dortmund,Argentina,3,3
+AC Milan,Chelsea,4,1
+Inter Miami,France,4,1
+France,Liverpool,3,1
+Atletico Madrid,Brazil,4,4
+Barcelona,Seattle Sounders,4,1
+England,Atletico Madrid,4,4
+Chelsea,Atletico Madrid,0,5
+Atletico Madrid,England,5,3
+Liverpool,Manchester City,3,0
+England,Liverpool,2,1
+Atletico Madrid,Manchester City,4,0
+Inter Miami,Barcelona,0,1
+France,Chelsea,1,3
+Seattle Sounders,Borussia Dortmund,1,0
+Inter Miami,Atletico Madrid,4,5
+Brazil,Real Madrid,5,0
+Atletico Madrid,Juventus,2,2
+Arsenal,Inter Milan,1,0
+Argentina,Bayern Munich,1,3
+LAFC,AC Milan,4,5
+Inter Milan,Arsenal,5,3
+England,Inter Miami,2,1
+England,Seattle Sounders,1,0
+Marseille,Argentina,3,0
+PSG,Brazil,1,0
+Inter Milan,Chelsea,2,3
+PSG,Chelsea,5,2
+AC Milan,Real Madrid,5,0
+PSG,Seattle Sounders,1,4
+Argentina,Bayern Munich,3,1
+Chelsea,Inter Milan,3,2
+Borussia Dortmund,Seattle Sounders,1,3
+Borussia Dortmund,Juventus,1,2
+Borussia Dortmund,Manchester City,4,4
+LAFC,Argentina,1,0
+AC Milan,Juventus,1,3
+Real Madrid,Bayern Munich,3,2
+Barcelona,PSG,0,4
+Inter Milan,Atletico Madrid,3,3
+Juventus,Bayern Munich,4,1
+Liverpool,Brazil,4,5
+Argentina,Marseille,0,1
+France,Barcelona,3,4
+Argentina,Atletico Madrid,2,0
+PSG,Argentina,5,5
+AC Milan,England,1,4
+Argentina,LAFC,1,2
+LAFC,Juventus,4,0
+Arsenal,AC Milan,1,4
+Atletico Madrid,France,5,1
+Seattle Sounders,Inter Milan,1,0
+Bayern Munich,Inter Miami,0,4
+Chelsea,Marseille,1,2
+LAFC,Inter Miami,0,5
+LAFC,Arsenal,0,2
+Inter Milan,Atletico Madrid,2,1
+Barcelona,Juventus,5,5
+Barcelona,Real Madrid,5,1
+LAFC,Juventus,2,0
+Manchester City,France,2,2
+PSG,Arsenal,1,2
+Inter Milan,Borussia Dortmund,5,3
+England,Borussia Dortmund,4,1
+Inter Miami,Atletico Madrid,3,3
+Borussia Dortmund,Manchester City,4,1
+Bayern Munich,Marseille,4,2
+Liverpool,Seattle Sounders,1,4
+Bayern Munich,Manchester City,0,3
+England,AC Milan,1,4
+AC Milan,Arsenal,3,2
+Argentina,Arsenal,2,3
+Chelsea,Argentina,4,3
+AC Milan,LAFC,4,0
+Manchester City,Liverpool,0,4
+Atletico Madrid,Arsenal,0,0
+Chelsea,Bayern Munich,4,1
+Marseille,Manchester City,0,4
+Argentina,Atletico Madrid,2,2
+Atletico Madrid,Barcelona,1,5
+Bayern Munich,Atletico Madrid,5,1
+Borussia Dortmund,Brazil,3,4
+Juventus,Inter Milan,4,4
+Brazil,PSG,1,2
+Real Madrid,Bayern Munich,4,0
+Inter Milan,Liverpool,2,5
+LAFC,Manchester City,3,3
+Seattle Sounders,Brazil,5,1
+France,PSG,4,3
+Juventus,Liverpool,2,4
+LAFC,France,3,1
+Argentina,Liverpool,3,2
+Atletico Madrid,Inter Miami,1,3
+England,Bayern Munich,5,0
+Bayern Munich,Real Madrid,5,2
+LAFC,Brazil,2,1
+PSG,Argentina,0,2
+Liverpool,Manchester City,3,3
+Arsenal,Argentina,2,1
+PSG,Arsenal,1,3
+Inter Miami,Manchester City,3,4
+Argentina,Brazil,5,1
+Liverpool,England,0,0
+England,Seattle Sounders,2,4
+Manchester City,Borussia Dortmund,4,4
+Argentina,France,5,2
+France,Arsenal,1,4
+Brazil,Juventus,3,1
+Seattle Sounders,Real Madrid,0,4
+Barcelona,Argentina,5,5
+Bayern Munich,PSG,0,3
+AC Milan,Liverpool,2,0
+Atletico Madrid,PSG,3,5
+Arsenal,AC Milan,3,1
+Chelsea,England,5,2
+Brazil,Seattle Sounders,3,5
+Borussia Dortmund,Inter Milan,0,1
+LAFC,Barcelona,1,1
+Borussia Dortmund,Brazil,3,4
+Seattle Sounders,Chelsea,4,3
+England,PSG,3,2
+PSG,AC Milan,3,0
+Atletico Madrid,Barcelona,1,3
+England,Borussia Dortmund,4,3
+Argentina,LAFC,5,0
+France,Liverpool,1,2
+Manchester City,Marseille,4,5
+Chelsea,Liverpool,0,5
+England,Borussia Dortmund,2,3
+Inter Miami,Liverpool,5,3
+Manchester City,Borussia Dortmund,2,4
+Liverpool,England,2,3
+Arsenal,Seattle Sounders,0,2
+Manchester City,Chelsea,3,0
+Marseille,Bayern Munich,4,3
+AC Milan,Borussia Dortmund,2,0
+Liverpool,Brazil,1,5
+Bayern Munich,Inter Miami,2,4
+Brazil,PSG,4,2
+AC Milan,Chelsea,2,1
+Manchester City,Borussia Dortmund,1,2
+Borussia Dortmund,Argentina,1,0
+Manchester City,Real Madrid,3,0
+England,Liverpool,2,5
+Barcelona,Atletico Madrid,5,3
+Liverpool,Arsenal,5,5
+Chelsea,AC Milan,5,4
+Barcelona,Brazil,1,3
+Argentina,Seattle Sounders,0,1
+Seattle Sounders,Liverpool,4,0
+Argentina,Liverpool,1,5
+Marseille,AC Milan,3,3
+AC Milan,Juventus,5,4
+England,Argentina,5,4
+Chelsea,Borussia Dortmund,4,2
+AC Milan,Inter Milan,5,5
+Juventus,PSG,2,5
+Inter Miami,Bayern Munich,1,2
+Juventus,Marseille,3,0
+France,Barcelona,2,0
+Seattle Sounders,AC Milan,5,4
+Chelsea,Inter Miami,4,4
+Juventus,France,1,2
+Marseille,Atletico Madrid,4,5
+Inter Miami,PSG,0,4
+Seattle Sounders,Borussia Dortmund,3,1
+Chelsea,France,4,1
+Barcelona,AC Milan,4,1
+Barcelona,Juventus,2,1
+Barcelona,Atletico Madrid,1,1
+Arsenal,Barcelona,3,3
+LAFC,Inter Miami,3,2
+Borussia Dortmund,Arsenal,2,1
+Chelsea,Manchester City,2,5
+Inter Miami,Marseille,0,1
+LAFC,Brazil,2,4
+Barcelona,Atletico Madrid,0,1
+Liverpool,Arsenal,0,3
+Real Madrid,Inter Miami,5,4
+Arsenal,Liverpool,5,1
+Seattle Sounders,Real Madrid,4,2
+AC Milan,Bayern Munich,5,5
+Inter Milan,Marseille,5,0
+Argentina,Manchester City,5,2
+Borussia Dortmund,Inter Milan,4,2
+Manchester City,Argentina,3,3
+LAFC,Bayern Munich,1,5
+Inter Miami,Manchester City,3,2
+England,Real Madrid,5,1
+Bayern Munich,Barcelona,0,3
+Borussia Dortmund,Marseille,5,0
+Juventus,England,1,5
+Borussia Dortmund,Bayern Munich,5,2
+Liverpool,Inter Miami,0,3
+Seattle Sounders,PSG,5,5
+France,Borussia Dortmund,2,1
+PSG,Inter Milan,4,3
+Atletico Madrid,LAFC,1,1
+Bayern Munich,Inter Miami,5,1
+Chelsea,Seattle Sounders,3,2
+Argentina,Brazil,0,0
+Bayern Munich,Argentina,3,0
+Juventus,PSG,0,4
+Real Madrid,Borussia Dortmund,1,4
+Inter Miami,France,3,1
+PSG,Seattle Sounders,5,3
+AC Milan,Barcelona,0,2
+France,Liverpool,0,0
+Bayern Munich,Borussia Dortmund,2,3
+PSG,AC Milan,4,0
+France,Borussia Dortmund,0,0
+Manchester City,Argentina,3,4
+Manchester City,Borussia Dortmund,4,3
+Chelsea,Bayern Munich,4,2
+Chelsea,Inter Miami,5,3
+Arsenal,PSG,3,4
+LAFC,Inter Milan,3,4
+France,Inter Miami,0,4
+Atletico Madrid,Arsenal,4,2
+Arsenal,France,1,2
+Brazil,Liverpool,5,5
+Manchester City,Real Madrid,0,2
+LAFC,Atletico Madrid,4,5
+Juventus,Chelsea,4,3
+Real Madrid,Argentina,3,1
+Seattle Sounders,Borussia Dortmund,3,4
+Juventus,Arsenal,1,1
+Marseille,Juventus,5,1
+England,Inter Miami,0,4
+Arsenal,Borussia Dortmund,5,5
+Argentina,Inter Milan,4,5
+LAFC,England,4,1
+Real Madrid,Atletico Madrid,0,3
+Bayern Munich,France,5,2
+France,Inter Miami,4,2
+LAFC,Bayern Munich,3,4
+Inter Miami,Real Madrid,4,3
+AC Milan,Inter Miami,3,3
+France,Bayern Munich,5,1
+Arsenal,Argentina,2,1
+Barcelona,Manchester City,0,1
+France,PSG,0,2
+Atletico Madrid,Inter Miami,5,3
+Marseille,Liverpool,5,4
+Argentina,Inter Milan,1,2
+Atletico Madrid,LAFC,3,0
+Real Madrid,Seattle Sounders,5,4
+PSG,Marseille,2,3
+France,Bayern Munich,0,4
+Marseille,Seattle Sounders,4,0
+Real Madrid,AC Milan,3,2
+Juventus,Arsenal,4,1
+Inter Milan,Bayern Munich,2,4
+LAFC,Chelsea,1,2
+Arsenal,Bayern Munich,2,5
+Argentina,England,1,5
+Seattle Sounders,Argentina,5,4
+Brazil,LAFC,3,4
+Manchester City,Real Madrid,0,0
+Arsenal,Real Madrid,5,5
+Atletico Madrid,PSG,4,3
+PSG,Manchester City,3,0
+PSG,Argentina,3,0
+Bayern Munich,France,3,4
+Argentina,LAFC,1,0
+Arsenal,LAFC,4,4
+Brazil,France,0,5
+Brazil,AC Milan,5,3
+PSG,Borussia Dortmund,3,1
+Inter Milan,Arsenal,1,3
+Juventus,Manchester City,1,4
+Chelsea,Barcelona,5,1
+Liverpool,Brazil,5,2
+France,Bayern Munich,5,4
+Brazil,LAFC,3,3
+Marseille,Seattle Sounders,1,1
+France,PSG,2,4
+Real Madrid,England,5,2
+Marseille,Bayern Munich,1,0
+Arsenal,Real Madrid,3,5
+Marseille,PSG,3,5
+Atletico Madrid,Real Madrid,1,2
+Juventus,Liverpool,5,4
+Borussia Dortmund,Bayern Munich,0,0
+France,Marseille,4,0
+Seattle Sounders,Borussia Dortmund,4,2
+Argentina,England,4,0
+Inter Miami,Juventus,1,4
+England,Brazil,1,1
+England,France,2,2
+Real Madrid,Argentina,3,1
+France,Atletico Madrid,4,1
+Real Madrid,Manchester City,3,5
+Arsenal,Atletico Madrid,1,1
+Manchester City,PSG,2,1
+England,Bayern Munich,1,3
+Juventus,Atletico Madrid,3,5
+England,Borussia Dortmund,4,4
+Borussia Dortmund,Liverpool,1,1
+Liverpool,Arsenal,3,3
+PSG,Argentina,1,3
+Marseille,Chelsea,1,0
+PSG,Arsenal,3,0
+PSG,Bayern Munich,4,0
+Argentina,France,1,0
+AC Milan,Bayern Munich,5,4
+Chelsea,Brazil,4,1
+Borussia Dortmund,Juventus,5,4
+Chelsea,Atletico Madrid,3,0
+France,LAFC,4,5
+Marseille,Seattle Sounders,2,2
+Marseille,France,4,0
+Real Madrid,Inter Miami,1,3
+England,Brazil,3,1
+England,Barcelona,3,3
+PSG,Atletico Madrid,3,1
+England,Real Madrid,0,2
+Bayern Munich,Inter Milan,2,3
+Manchester City,Real Madrid,0,4
+PSG,Barcelona,5,4
+Seattle Sounders,France,3,1
+England,LAFC,4,1
+Seattle Sounders,Barcelona,0,0
+Bayern Munich,Borussia Dortmund,0,0
+Liverpool,PSG,0,2
+Real Madrid,England,3,1
+Arsenal,Seattle Sounders,1,0
+Argentina,Bayern Munich,5,5
+Atletico Madrid,Barcelona,2,2
+Inter Miami,Arsenal,4,4
+Manchester City,Seattle Sounders,3,4
+AC Milan,Barcelona,4,2
+Arsenal,Seattle Sounders,1,4
+Arsenal,England,0,1
+Borussia Dortmund,Inter Miami,5,2
+Chelsea,Borussia Dortmund,5,0
+Atletico Madrid,Chelsea,4,2
+Liverpool,Atletico Madrid,1,4
+Brazil,Atletico Madrid,5,3
+PSG,England,2,4
+Barcelona,Juventus,1,3
+Argentina,Atletico Madrid,2,3
+Marseille,Real Madrid,1,4
+Argentina,Inter Miami,2,0
+LAFC,AC Milan,1,5
+Marseille,France,4,1
+Inter Milan,Manchester City,0,3
+Inter Miami,Liverpool,4,0
+Arsenal,Manchester City,1,1
+Liverpool,Argentina,2,3
+Bayern Munich,Real Madrid,4,4
+France,Inter Milan,2,0
