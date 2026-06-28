@@ -22,6 +22,7 @@ This project uses Python, Pandas, MySQL, and SQL to process, store, and analyze 
 
 ## Project Structure
 
+```text
 soccer-data-pipeline/
 ├── data/
 │   └── results.csv
@@ -35,6 +36,7 @@ soccer-data-pipeline/
 │   ├── analytics.sql
 │   └── create_teams_table.sql
 └── README.md
+```
 
 ## Project Workflow
 
