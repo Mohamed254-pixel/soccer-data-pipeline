@@ -82,3 +82,24 @@ SELECT home_team,
 FROM matches
 GROUP BY home_team
 HAVING AVG(home_goals) >= 3;
+
+-- Join matches with team information
+SELECT
+    m.home_team,
+    t.country,
+    t.league,
+    m.home_goals
+FROM matches m
+JOIN teams t
+ON m.home_team = t.team_name
+LIMIT 20;
+
+-- Average goals by league
+SELECT
+    t.league,
+    AVG(m.home_goals) AS avg_goals
+FROM matches m
+JOIN teams t
+ON m.home_team = t.team_name
+GROUP BY t.league
+ORDER BY avg_goals DESC;
