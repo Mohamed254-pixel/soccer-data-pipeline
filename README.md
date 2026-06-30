@@ -2,69 +2,97 @@
 
 ## Overview
 
-This project uses Python, Pandas, MySQL, and SQL to process, store, and analyze international football match data. The goal is to gain hands-on experience with data engineering concepts, database management, and data analysis while working with a large real-world dataset.
+This project is an end-to-end data engineering pipeline that collects, transforms, stores, and analyzes football data using Python, Pandas, MySQL, SQL, and API-FOOTBALL.
+
+The project combines historical international match data with live football data retrieved from a football API to demonstrate ETL (Extract, Transform, Load) workflows and database analytics.
 
 ## Dataset
 
-* 43,281 international football matches
-* Historical data spanning 1872 to the present
-* Includes match dates, teams, scores, tournaments, cities, and countries
+### Historical Dataset
+
+- 43,281 international football matches
+- Historical data from 1872 to present
+- Match dates, teams, scores, tournaments, cities, and countries
+
+### Live API Data
+
+- Premier League 2024 season data
+- Retrieved from API-FOOTBALL
+- 380 match records loaded into MySQL
 
 ## Tech Stack
 
-* Python
-* Pandas
-* MySQL
-* SQL
-* Jupyter Notebook
-* Git
-* GitHub
+- Python
+- Pandas
+- MySQL
+- SQL
+- API-FOOTBALL
+- Jupyter Notebook
+- Git
+- GitHub
+
+## Architecture
+
+```text
+API-FOOTBALL
+      ↓
+Python Requests
+      ↓
+Pandas Transformations
+      ↓
+CSV Storage
+      ↓
+MySQL Database
+      ↓
+SQL Analytics
+```
 
 ## Project Structure
 
 ```text
 soccer-data-pipeline/
 ├── data/
-│   └── results.csv
-├── notebooks/
-│   └── soccer_analysis.ipynb
+│   ├── results.csv
+│   └── live_matches.csv
 ├── scripts/
-│   ├── api_teams.py
-│   ├── real_matches.py
-│   └── load_results_to_mysql.py
+│   ├── api_matches.py
+│   ├── load_live_matches.py
+│   ├── load_results_to_mysql.py
+│   └── api_teams.py
 ├── sql/
 │   ├── analytics.sql
 │   └── create_teams_table.sql
+├── run_pipeline.py
 └── README.md
 ```
 
-## Project Workflow
+## ETL Workflow
 
-1. Load and process match data using Python and Pandas
-2. Perform data quality checks
-3. Store data in MySQL
-4. Analyze data using SQL queries
-5. Explore trends and insights through visualizations
+1. Extract football data from API-FOOTBALL
+2. Transform JSON responses using Pandas
+3. Save processed data to CSV
+4. Load data into MySQL
+5. Run SQL analytics queries
 
 ## Analysis Performed
 
-* Top tournaments by match count
-* Match activity trends over time
-* SQL analytics queries
-* Data quality checks for missing values and duplicates
+- Top tournaments by match count
+- Match activity trends over time
+- Data quality checks
+- Team performance analysis
+- SQL analytics on live match data
 
-## Key Findings
+## Results
 
-* The dataset contains over 150 years of international football history
-* Friendly matches are the most common tournament type
-* International match activity has increased significantly over time
+- Loaded 43,281 historical matches into MySQL
+- Loaded 380 live Premier League matches from API-FOOTBALL
+- Built an automated ETL workflow using Python and SQL
+- Performed database analytics using MySQL queries
 
 ## Future Improvements
 
-* Interactive dashboards using Tableau or Power BI
-* Live football API integration
-* Automated pipeline scheduling
-* Match prediction and forecasting models
-
-```
-```
+- Power BI dashboard
+- Tableau visualizations
+- Automated scheduling with GitHub Actions
+- Additional API endpoints (standings, player statistics)
+- Match prediction models
