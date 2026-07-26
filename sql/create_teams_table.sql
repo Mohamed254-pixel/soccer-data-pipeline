@@ -1,8 +1,13 @@
-CREATE TABLE teams (
-    team_id INT AUTO_INCREMENT PRIMARY KEY,
-    team_name VARCHAR(50),
-    country VARCHAR(50),
-    league VARCHAR(50)
+USE soccer_db;
+
+CREATE TABLE IF NOT EXISTS teams (
+    team_id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    team_name VARCHAR(100) NOT NULL,
+    country VARCHAR(100),
+    league VARCHAR(100),
+    stadium VARCHAR(150),
+    PRIMARY KEY (team_id),
+    UNIQUE KEY uq_team_name_league (team_name, league)
 );
 
 INSERT INTO teams (team_name, country, league) VALUES
@@ -26,4 +31,6 @@ INSERT INTO teams (team_name, country, league) VALUES
 ('Argentina', 'Argentina', 'International'),
 ('Brazil', 'Brazil', 'International'),
 ('France', 'France', 'International'),
-('England', 'England', 'International');
+('England', 'England', 'International')
+ON DUPLICATE KEY UPDATE
+    country = VALUES(country);

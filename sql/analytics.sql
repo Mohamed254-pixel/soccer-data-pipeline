@@ -1,17 +1,17 @@
 -- Show all matches
-SELECT * FROM matches;
+SELECT * FROM live_matches;
 
 -- Show home teams and goals
 SELECT home_team, home_goals
-FROM matches;
+FROM live_matches;
 
 -- Show away teams and goals
 SELECT away_team, away_goals
-FROM matches;
+FROM live_matches;
 
 -- Home team scored more than 2 goals
 SELECT *
-FROM matches
+FROM live_matches
 WHERE home_goals > 2;
 
 -- Total goals scored in each match
@@ -19,67 +19,67 @@ SELECT
     home_team,
     away_team,
     home_goals + away_goals AS total_goals
-FROM matches;
+FROM live_matches;
 
 -- Count total matches
 SELECT COUNT(*) AS total_matches
-FROM matches;
+FROM live_matches;
 
 -- Top 10 highest scoring matches
 SELECT home_team,
        away_team,
        home_goals + away_goals AS total_goals
-FROM matches
+FROM live_matches
 ORDER BY total_goals DESC
 LIMIT 10;
 
 -- Team with most home games
 SELECT home_team,
        COUNT(*) AS games_played
-FROM matches
+FROM live_matches
 GROUP BY home_team
 ORDER BY games_played DESC;
 
 -- Average home goals by team
 SELECT home_team,
        AVG(home_goals) AS avg_goals
-FROM matches
+FROM live_matches
 GROUP BY home_team
 ORDER BY avg_goals DESC;
 
 -- Total goals scored by team
 SELECT home_team,
        SUM(home_goals) AS total_goals
-FROM matches
+FROM live_matches
 GROUP BY home_team
 ORDER BY total_goals DESC;
 
 -- Matches with 0 goals by home team
 SELECT *
-FROM matches
+FROM live_matches
 WHERE home_goals = 0;
 
 -- Matches with 5 or more total goals
 SELECT *
-FROM matches
+FROM live_matches
 WHERE home_goals + away_goals >= 5;
 
 -- Highest home score
 SELECT *
-FROM matches
+FROM live_matches
 ORDER BY home_goals DESC
 LIMIT 1;
 
 -- Highest away score
 SELECT *
-FROM matches
+FROM live_matches
 ORDER BY away_goals DESC
 LIMIT 1;
 
 -- Teams that scored at least 3 goals on average at home
 SELECT home_team,
        AVG(home_goals) AS avg_goals
-FROM matches
+FROM live_matches
 GROUP BY home_team
 HAVING AVG(home_goals) >= 3;
 
@@ -89,7 +89,7 @@ SELECT
     t.country,
     t.league,
     m.home_goals
-FROM matches m
+FROM live_matches m
 JOIN teams t
 ON m.home_team = t.team_name
 LIMIT 20;
@@ -98,7 +98,7 @@ LIMIT 20;
 SELECT
     t.league,
     AVG(m.home_goals) AS avg_goals
-FROM matches m
+FROM live_matches m
 JOIN teams t
 ON m.home_team = t.team_name
 GROUP BY t.league

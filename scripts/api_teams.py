@@ -1,26 +1,50 @@
-import requests
+from pathlib import Path
+
 import pandas as pd
+import requests
 
-url = "https://www.thesportsdb.com/api/v1/json/3/search_all_teams.php?l=English%20Premier%20League"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_PATH = PROJECT_ROOT / "data" / "premier_league_teams.csv"
+API_URL = (
+    "https://www.thesportsdb.com/api/v1/json/3/"
+    "search_all_teams.php?l=English%20Premier%20League"
+)
 
-response = requests.get(url)
-data = response.json()
 
-teams = []
+def fetch_teams():
+    response = requests.get(API_URL, timeout=30)
+    response.raise_for_status()
 
-for team in data["teams"]:
-    teams.append({
-        "team_name": team["strTeam"],
-        "stadium": team["strStadium"],
-        "country": team["strCountry"]
-    })
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise RuntimeError("TheSportsDB returned invalid JSON.") from exc
 
-df = pd.DataFrame(teams)
+    api_teams = payload.get("teams")
+    if not isinstance(api_teams, list):
+        raise RuntimeError("TheSportsDB response did not contain a team list.")
 
-df.to_csv("data/premier_league_teams.csv", index=False)
+    teams = []
+    for team in api_teams:
+        teams.append(
+            {
+                "team_name": team["strTeam"],
+                "stadium": team["strStadium"],
+                "country": team["strCountry"],
+            }
+        )
 
-print(df.head())
-print(f"Saved {len(df)} teams")
+    return pd.DataFrame(teams, columns=["team_name", "stadium", "country"])
 
-for team in data["teams"]:
-    print(team["strTeam"])
+
+def main():
+    df = fetch_teams()
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(OUTPUT_PATH, index=False)
+
+    print(df.head())
+    print(f"Saved {len(df)} teams to {OUTPUT_PATH}")
+
+
+if __name__ == "__main__":
+    main()
