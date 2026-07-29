@@ -1,5 +1,8 @@
-mysql-connector-python
-pandas
-python-dotenv
-requests
-notebook
+# Pipeline runtime
+mysql-connector-python==9.7.0
+pandas==3.0.5
+python-dotenv==1.2.2
+requests==2.34.2
+
+# Notebook analysis
+notebook==7.6.1

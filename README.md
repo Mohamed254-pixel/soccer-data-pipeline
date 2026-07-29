@@ -1,172 +1,209 @@
 # Soccer Data Pipeline
 
-## Overview
+An end-to-end data engineering project that extracts football data from APIs,
+cleans and validates it with Pandas, stores it in MySQL, and supports SQL and
+notebook-based analysis.
 
-This project is an end-to-end data engineering pipeline that collects, transforms, stores, and analyzes football data using Python, Pandas, MySQL, SQL, and API-FOOTBALL.
+## Highlights
 
-The project combines historical international match data with live football data retrieved from a football API to demonstrate ETL (Extract, Transform, Load) workflows and database analytics.
-
-## Dataset
-
-### Historical Dataset
-
-- 43,281 international football matches
-- 43,277 completed-score records pass the current validation rules
-- Historical data from 1872 to present
-- Match dates, teams, scores, tournaments, cities, and countries
-
-### Live API Data
-
-- Premier League 2024 season data
-- Retrieved from API-FOOTBALL
-- 380 match records loaded into MySQL
-
-## Tech Stack
-
-- Python
-- Pandas
-- MySQL
-- SQL
-- API-FOOTBALL
-- Jupyter Notebook
-- Git
-- GitHub
+- Extracts Premier League fixtures from API-FOOTBALL
+- Collects Premier League team and stadium information from TheSportsDB
+- Processes 43,281 historical international match records
+- Validates 43,277 completed historical results for database loading
+- Uses CSV files as a transparent staging layer
+- Loads data with batch upserts so pipeline reruns do not create duplicates
+- Keeps API and database credentials outside the source code
+- Stops clearly when an API, configuration, or pipeline step fails
 
 ## Architecture
 
 ```text
-API-FOOTBALL
-      ↓
-Python Requests
-      ↓
-Pandas Transformations
-      ↓
-CSV Storage
-      ↓
-MySQL Database
-      ↓
-SQL Analytics
+Football APIs
+      │
+      ▼
+Python extraction
+      │
+      ▼
+Pandas validation and transformation
+      │
+      ▼
+CSV staging files
+      │
+      ▼
+MySQL tables
+      │
+      ▼
+SQL and Jupyter analysis
 ```
 
-## Setup
+## Data
 
-### 1. Rotate the exposed database password
+| Source | Scope | Records used |
+| --- | --- | ---: |
+| Historical results CSV | International matches from 1872 onward | 43,277 completed matches |
+| API-FOOTBALL | Premier League 2024 fixtures | 380 matches |
+| TheSportsDB | Premier League teams and stadiums | 10 teams in the current CSV |
 
-An earlier version of this project contained a MySQL password in tracked Python
-files. Change that password in MySQL before using the project again. Removing it
-from the latest code does not make the old password safe because Git history is
-public.
+Four historical fixtures without final scores remain in the source data but are
+excluded by the loader's validation rules.
 
-Log in to MySQL with the current root password and replace it:
+## Technology
 
-```sql
-ALTER USER 'root'@'localhost'
-IDENTIFIED BY 'choose-a-new-private-root-password';
+- Python 3.11+
+- Pandas
+- Requests
+- MySQL
+- SQL
+- API-FOOTBALL
+- TheSportsDB
+- Jupyter Notebook
+
+## Quick Start
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/Mohamed254-pixel/soccer-data-pipeline.git
+cd soccer-data-pipeline
 ```
 
-### 2. Create a Python environment
+### 2. Create the Python environment
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+python3 -m pip install --upgrade pip
 python3 -m pip install -r requirements.txt
 ```
 
-### 3. Create the MySQL database and tables
+The versions in `requirements.txt` match the environment used to validate this
+project.
+
+### 3. Create the database
+
+Run the schema and team seed files with a MySQL administrator account:
 
 ```bash
 mysql -u root -p < sql/schema.sql
 mysql -u root -p < sql/create_teams_table.sql
 ```
 
-Then create a dedicated application user instead of connecting as `root`:
+Create a dedicated pipeline account:
 
 ```sql
 CREATE USER IF NOT EXISTS 'soccer_app'@'localhost'
-IDENTIFIED BY 'choose-a-different-app-password';
+IDENTIFIED BY 'choose-a-private-app-password';
 
 GRANT SELECT, INSERT, UPDATE, DELETE
 ON soccer_db.*
 TO 'soccer_app'@'localhost';
 ```
 
-### 4. Configure local environment variables
+### 4. Configure environment variables
 
-Copy the safe example without overwriting an existing `.env`:
+Create your private local configuration:
 
 ```bash
-cp -n .env.example .env
+cp .env.example .env
 ```
 
-If `.env` already exists, copy the missing `DB_` settings from `.env.example`
-into it. Use the new `soccer_app` password. The real `.env` file is ignored by
-Git and must never be committed.
+Edit `.env` and supply your API key and MySQL app password:
 
-### 5. Run the live-match pipeline
+```dotenv
+API_KEY=your_api_football_key
+FOOTBALL_LEAGUE_ID=39
+FOOTBALL_SEASON=2024
+
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=soccer_app
+DB_PASSWORD=your_private_app_password
+DB_NAME=soccer_db
+```
+
+The `.env` file is ignored by Git. Never commit real API keys or passwords.
+
+### 5. Run the live pipeline
 
 ```bash
 python3 run_pipeline.py
 ```
 
-The pipeline retrieves API data, writes `data/live_matches.csv`, and safely
-inserts or updates the corresponding MySQL records.
+This extracts the configured league season, refreshes
+`data/live_matches.csv`, and inserts or updates the corresponding database
+records.
 
-### 6. Load the historical dataset
+### 6. Load historical results
 
 ```bash
 python3 scripts/load_results_to_mysql.py
 ```
 
+### 7. Verify the load
+
+```sql
+SELECT COUNT(*) AS live_matches FROM soccer_db.live_matches;
+SELECT COUNT(*) AS historical_results FROM soccer_db.results;
+```
+
+The included data produces 380 live-match rows and 43,277 historical-result
+rows. Repeating either loader leaves these counts unchanged.
+
+## Database Tables
+
+| Table | Purpose | Duplicate protection |
+| --- | --- | --- |
+| `live_matches` | API fixture dates, teams, and scores | Unique date/home/away fixture key |
+| `results` | Historical international match results | Primary key on source `id` |
+| `teams` | Team, country, league, and stadium details | Unique team/league key |
+
 ## Project Structure
 
 ```text
 soccer-data-pipeline/
-├── .env.example
-├── requirements.txt
-├── data/
-│   ├── results.csv
-│   └── live_matches.csv
+├── data/                       # CSV source and staging data
 ├── scripts/
-│   ├── api_matches.py
-│   ├── db.py
-│   ├── load_live_matches.py
+│   ├── api_matches.py          # Extract API-FOOTBALL fixtures
+│   ├── api_teams.py            # Extract TheSportsDB teams
+│   ├── db.py                   # Shared environment-based DB connection
+│   ├── load_live_matches.py    # Validate and upsert API fixtures
 │   ├── load_results_to_mysql.py
-│   └── api_teams.py
+│   └── soccer_analysis.ipynb
 ├── sql/
-│   ├── analytics.sql
-│   ├── create_teams_table.sql
-│   └── schema.sql
-├── run_pipeline.py
+│   ├── analytics.sql           # Example analytical queries
+│   ├── create_teams_table.sql  # Team seed data
+│   └── schema.sql              # Database and table definitions
+├── .env.example                # Safe configuration template
+├── requirements.txt            # Reproducible Python environment
+├── run_pipeline.py             # Live ETL entry point
 └── README.md
 ```
 
-## ETL Workflow
+## Analytics
 
-1. Extract football data from API-FOOTBALL
-2. Transform JSON responses using Pandas
-3. Save processed data to CSV
-4. Load data into MySQL
-5. Run SQL analytics queries
+The SQL and notebook analysis cover:
 
-## Analysis Performed
+- Highest-scoring matches
+- Goals by team
+- Average home goals
+- Home and away scoring comparisons
+- Team and league joins
+- Tournament and match-volume trends
+- Data-quality checks
 
-- Top tournaments by match count
-- Match activity trends over time
-- Data quality checks
-- Team performance analysis
-- SQL analytics on live match data
+## Reliability and Security
 
-## Results
+- Required configuration is validated before database connections are created.
+- API requests use timeouts, HTTP error checks, and response validation.
+- Database writes are committed only after a successful batch.
+- Failed writes are rolled back and connections are closed safely.
+- Unique database keys and upserts make repeat loads idempotent.
+- Secrets are loaded from `.env`, which is excluded from version control.
 
-- Validated 43,277 completed historical matches for MySQL
-- Loaded 380 live Premier League matches from API-FOOTBALL
-- Built an automated ETL workflow using Python and SQL
-- Performed database analytics using MySQL queries
+## Roadmap
 
-## Future Improvements
-
-- Power BI dashboard
-- Tableau visualizations
-- Automated scheduling with GitHub Actions
-- Additional API endpoints (standings, player statistics)
-- Match prediction models
+- Interactive Streamlit dashboard
+- Automated tests and GitHub Actions
+- Scheduled pipeline runs
+- Additional leagues, standings, and player statistics
+- Match-prediction experiments
