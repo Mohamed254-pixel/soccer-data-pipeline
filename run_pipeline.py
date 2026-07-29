@@ -5,26 +5,34 @@ import sys
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
-def run_step(label, script):
+def run_step(label, script_path):
     print(f"\n{label}")
-    subprocess.run(
-        [sys.executable, str(PROJECT_ROOT / "scripts" / script)],
+
+    result = subprocess.run(
+        [sys.executable, str(script_path)],
         cwd=PROJECT_ROOT,
-        check=True,
     )
+
+    if result.returncode != 0:
+        raise SystemExit(
+            f"\nPipeline stopped because a step failed "
+            f"(exit code {result.returncode})."
+        )
 
 
 def main():
-    try:
-        run_step("Step 1: Pulling API data...", "api_matches.py")
-        run_step("Step 2: Loading into MySQL...", "load_live_matches.py")
-    except subprocess.CalledProcessError as exc:
-        print(f"\nPipeline stopped because a step failed (exit code {exc.returncode}).")
-        return exc.returncode
+    run_step(
+        "Step 1: Pulling API data...",
+        PROJECT_ROOT / "scripts" / "api_matches.py",
+    )
 
-    print("\nPipeline complete!")
-    return 0
+    run_step(
+        "Step 2: Loading into MySQL...",
+        PROJECT_ROOT / "scripts" / "load_live_matches.py",
+    )
+
+    print("\nPipeline completed successfully.")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

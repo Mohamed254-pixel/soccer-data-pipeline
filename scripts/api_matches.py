@@ -49,17 +49,19 @@ def fetch_matches():
     for match in fixtures:
         matches.append(
             {
+                "fixture_id": match["fixture"]["id"],
                 "date": match["fixture"]["date"],
                 "home_team": match["teams"]["home"]["name"],
                 "away_team": match["teams"]["away"]["name"],
                 "home_goals": match["goals"]["home"],
-                "away_goals": match["goals"]["away"],
+                "away_goals": match["goals"]["away"]
             }
         )
 
     return pd.DataFrame(
         matches,
         columns=[
+            "fixture_id",
             "date",
             "home_team",
             "away_team",
