@@ -21,14 +21,15 @@ CREATE TABLE IF NOT EXISTS results (
 );
 
 CREATE TABLE IF NOT EXISTS live_matches (
-    match_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    fixture_id BIGINT UNSIGNED NOT NULL,
     match_date DATETIME NOT NULL,
     home_team VARCHAR(100) NOT NULL,
     away_team VARCHAR(100) NOT NULL,
     home_goals SMALLINT UNSIGNED,
     away_goals SMALLINT UNSIGNED,
-    PRIMARY KEY (match_id),
+    PRIMARY KEY (fixture_id),
     UNIQUE KEY uq_live_fixture (match_date, home_team, away_team),
+    INDEX idx_live_match_date (match_date),
     INDEX idx_live_home_team (home_team),
     INDEX idx_live_away_team (away_team)
 );
