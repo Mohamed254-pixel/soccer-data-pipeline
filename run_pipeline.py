@@ -22,12 +22,22 @@ def run_step(label, script_path):
 
 def main():
     run_step(
-        "Step 1: Pulling API data...",
+        "Step 1: Pulling match data from API-FOOTBALL...",
         PROJECT_ROOT / "scripts" / "api_matches.py",
     )
 
     run_step(
-        "Step 2: Loading into MySQL...",
+        "Step 2: Pulling team and venue data from API-FOOTBALL...",
+        PROJECT_ROOT / "scripts" / "api_teams.py",
+    )
+
+    run_step(
+        "Step 3: Loading teams and venues into MySQL...",
+        PROJECT_ROOT / "scripts" / "load_teams.py",
+    )
+
+    run_step(
+        "Step 4: Loading matches into MySQL...",
         PROJECT_ROOT / "scripts" / "load_live_matches.py",
     )
 

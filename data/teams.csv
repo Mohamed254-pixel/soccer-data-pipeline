@@ -1,0 +1,21 @@
+api_team_id,team_name,team_code,country,league,stadium,founded,is_national,logo_url,venue_id
+42,Arsenal,ARS,England,Premier League,Emirates Stadium,1886,0,https://media.api-sports.io/football/teams/42.png,494
+66,Aston Villa,AST,England,Premier League,Villa Park,1874,0,https://media.api-sports.io/football/teams/66.png,495
+35,Bournemouth,BOU,England,Premier League,Vitality Stadium,1899,0,https://media.api-sports.io/football/teams/35.png,504
+55,Brentford,BRE,England,Premier League,Gtech Community Stadium,1889,0,https://media.api-sports.io/football/teams/55.png,10503
+51,Brighton,BRI,England,Premier League,American Express Stadium,1901,0,https://media.api-sports.io/football/teams/51.png,508
+49,Chelsea,CHE,England,Premier League,Stamford Bridge,1905,0,https://media.api-sports.io/football/teams/49.png,519
+52,Crystal Palace,CRY,England,Premier League,Selhurst Park,1861,0,https://media.api-sports.io/football/teams/52.png,525
+45,Everton,EVE,England,Premier League,Hill Dickinson Stadium,1878,0,https://media.api-sports.io/football/teams/45.png,22033
+36,Fulham,FUL,England,Premier League,Craven Cottage,1879,0,https://media.api-sports.io/football/teams/36.png,535
+57,Ipswich,IPS,England,Premier League,Portman Road,1878,0,https://media.api-sports.io/football/teams/57.png,545
+46,Leicester,LEI,England,Premier League,King Power Stadium,1884,0,https://media.api-sports.io/football/teams/46.png,547
+40,Liverpool,LIV,England,Premier League,Anfield,1892,0,https://media.api-sports.io/football/teams/40.png,550
+50,Manchester City,MCI,England,Premier League,Etihad Stadium,1880,0,https://media.api-sports.io/football/teams/50.png,555
+33,Manchester United,MUN,England,Premier League,Old Trafford,1878,0,https://media.api-sports.io/football/teams/33.png,556
+34,Newcastle,NEW,England,Premier League,St. James' Park,1892,0,https://media.api-sports.io/football/teams/34.png,562
+65,Nottingham Forest,NOT,England,Premier League,The City Ground,1865,0,https://media.api-sports.io/football/teams/65.png,566
+41,Southampton,SOU,England,Premier League,St. Mary's Stadium,1885,0,https://media.api-sports.io/football/teams/41.png,585
+47,Tottenham,TOT,England,Premier League,Tottenham Hotspur Stadium,1882,0,https://media.api-sports.io/football/teams/47.png,593
+48,West Ham,WES,England,Premier League,London Stadium,1895,0,https://media.api-sports.io/football/teams/48.png,598
+39,Wolves,WOL,England,Premier League,Molineux Stadium,1877,0,https://media.api-sports.io/football/teams/39.png,600
