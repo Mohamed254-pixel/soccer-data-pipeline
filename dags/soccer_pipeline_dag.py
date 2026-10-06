@@ -9,6 +9,7 @@ from airflow.sdk import dag, task
 
 PROJECT_ROOT = Path("/opt/soccer")
 
+
 def run_script(script_name):
     script_path = PROJECT_ROOT / "scripts" / script_name
 
@@ -17,6 +18,7 @@ def run_script(script_name):
         cwd=PROJECT_ROOT,
         check=True,
     )
+
 
 @dag(
     dag_id="premier_league_etl",
@@ -31,7 +33,6 @@ def run_script(script_name):
     tags=["soccer", "etl", "mysql"],
 )
 def premier_league_etl():
-    pass
 
     @task
     def extract_matches():
@@ -49,13 +50,23 @@ def premier_league_etl():
     def load_matches():
         run_script("load_live_matches.py")
 
+    @task
+    def validate_data_quality():
+        run_script("validate_data_quality.py")
+
     matches_ready = extract_matches()
     teams_ready = extract_teams_and_venues()
-
     teams_loaded = load_teams_and_venues()
     matches_loaded = load_matches()
+    quality_checked = validate_data_quality()
 
-    matches_ready >> teams_ready >> teams_loaded >> matches_loaded
+    (
+        matches_ready
+        >> teams_ready
+        >> teams_loaded
+        >> matches_loaded
+        >> quality_checked
+    )
 
 
 premier_league_etl()
