@@ -1,6 +1,6 @@
 # Pipeline Architecture
 
-*Last reviewed: 2026-08-21*
+*Last reviewed: 2026-10-07*
 
 ## Scope
 
@@ -8,26 +8,67 @@ This pipeline processes data for the 2024 Premier League season only.
 
 It extracts:
 
-* 380 fixtures
-* 20 teams
-* 20 venues
+- 380 fixtures
+- 20 teams
+- 20 venues
 
 International matches, synthetic match data, and other leagues are outside the current project scope.
 
-## Data Flow
+## Architecture
 
 ```mermaid
 flowchart TD
-    API["API-FOOTBALL"] --> EXTRACT["Python extraction"]
-    EXTRACT --> VALIDATE["Pandas validation"]
-    VALIDATE --> CSV["CSV staging"]
+    AIRFLOW["Airflow in Docker"] --> EXTRACT["Python extraction"]
+    EXTRACT --> TRANSFORM["Pandas validation"]
+    TRANSFORM --> CSV["CSV staging"]
     CSV --> LOAD["MySQL UPSERT loaders"]
     LOAD --> DB["Premier League tables"]
+    DB --> QUALITY["Post-load quality checks"]
 ```
 
-## Pipeline Steps
+The project uses:
 
-The pipeline starts from `run_pipeline.py` and executes four Python scripts in order.
+- API-FOOTBALL as the data source
+- Python and Requests for extraction
+- Pandas for transformation and validation
+- CSV files as the staging layer
+- MySQL for relational storage
+- Apache Airflow for orchestration
+- Docker Compose for the Airflow environment
+
+## Pipeline Execution
+
+The pipeline has two execution options.
+
+### Local Python execution
+
+Running the following command executes the pipeline directly:
+
+```bash
+python3 run_pipeline.py
+```
+
+`run_pipeline.py` calls the extraction and loading scripts in sequence.
+
+### Airflow execution
+
+The `premier_league_etl` DAG runs the same pipeline as five monitored tasks:
+
+```text
+extract_matches
+        ↓
+extract_teams_and_venues
+        ↓
+load_teams_and_venues
+        ↓
+load_matches
+        ↓
+validate_data_quality
+```
+
+Airflow provides task status, retries, execution history, and logs. The DAG currently uses `schedule=None`, so runs are started manually through the Airflow interface or command line.
+
+## Pipeline Steps
 
 ### Step 1: Extract matches
 
@@ -35,14 +76,14 @@ The pipeline starts from `run_pipeline.py` and executes four Python scripts in o
 
 It extracts:
 
-* Fixture ID
-* Match date
-* Home team
-* Away team
-* Home goals
-* Away goals
+- Fixture ID
+- Match date
+- Home team
+- Away team
+- Home goals
+- Away goals
 
-The transformed data is saved to:
+Pandas organizes the response into rows and columns. The transformed data is saved to:
 
 ```text
 data/live_matches.csv
@@ -52,14 +93,14 @@ data/live_matches.csv
 
 `scripts/api_teams.py` calls the API-FOOTBALL teams endpoint.
 
-It separates the response into two datasets:
+It separates the API response into two datasets:
 
 ```text
 data/teams.csv
 data/venues.csv
 ```
 
-Team data includes API IDs, names, codes, country, founding year, logo, and venue ID.
+Team data includes API IDs, names, codes, country, league, founding year, logo URL, and venue ID.
 
 Venue data includes venue IDs, names, addresses, cities, capacity, surface, and image URL.
 
@@ -69,23 +110,85 @@ Venue data includes venue IDs, names, addresses, cities, capacity, surface, and 
 
 Venues load first because `teams.venue_id` references `venues.venue_id`.
 
-Full column definitions for both tables are in the [Data Model](data-model.md). This document only covers the relationship that determines load order.
-
 Before loading, the script verifies that every non-null venue ID referenced by a team exists in the venue dataset.
 
-If a referenced venue is missing, `load_teams.py` raises an error such as:
+If a referenced venue is missing, the loader raises an error before writing data to MySQL.
 
-```text
-ValueError: Teams reference missing venues: [494]
-```
-
-The loader exits with a nonzero status, and `run_pipeline.py` stops the remaining steps. Validation happens before the database connection is opened, so no team or venue rows are written.
+The script uses UPSERT operations so existing venues and teams are updated while new records are inserted.
 
 ### Step 4: Load matches
 
-`scripts/load_live_matches.py` validates and loads the fixture data.
+`scripts/load_live_matches.py` validates and loads the fixture data into the `live_matches` table.
 
-The API fixture ID is used as the primary key. Existing fixtures are updated, while new fixtures are inserted.
+The API fixture ID is the primary key. Existing fixtures are updated, while new fixtures are inserted.
+
+### Step 5: Validate data quality
+
+`scripts/validate_data_quality.py` checks the records stored in MySQL after loading finishes.
+
+The script checks:
+
+- Match row count equals 380
+- Team row count equals 20
+- Venue row count equals 20
+- Fixture IDs contain no duplicates
+- Fixture IDs are not missing
+- Team API IDs are not missing
+- Match scores are not missing
+- Match scores are not negative
+- Team-to-venue relationships are valid
+
+Each check prints `PASS` or `FAIL`.
+
+If any check fails, the script raises an error. Airflow then marks the `validate_data_quality` task and the DAG run as failed.
+
+## Airflow Orchestration
+
+The DAG is defined in:
+
+```text
+dags/soccer_pipeline_dag.py
+```
+
+Each Airflow task runs one Python script using `subprocess`.
+
+The DAG uses these default settings:
+
+- Owner: `mohamed`
+- Retries: 2
+- Retry delay: 5 minutes
+- Catchup: disabled
+- Schedule: manual
+
+Task dependencies ensure that later tasks do not start until earlier tasks finish successfully.
+
+A failed task prevents its downstream tasks from running. Airflow records the failure and provides logs for troubleshooting.
+
+## Docker Environment
+
+Docker Compose runs the Airflow environment.
+
+The main services include:
+
+- Airflow API server
+- Airflow scheduler
+- Airflow DAG processor
+- Airflow worker
+- Airflow triggerer
+- PostgreSQL for Airflow metadata
+- Redis for task communication
+
+The custom `Dockerfile` starts from the Apache Airflow image and installs the Python packages required by the soccer pipeline.
+
+The project directory is mounted inside the containers at:
+
+```text
+/opt/soccer
+```
+
+This allows Airflow workers to access the DAG, scripts, CSV files, and project configuration.
+
+The soccer pipeline still loads its final data into MySQL. The PostgreSQL container belongs to Airflow and stores Airflow’s internal metadata.
 
 ## Database Write Order
 
@@ -95,48 +198,68 @@ venues
 teams
    ↓
 live_matches
+   ↓
+data-quality validation
 ```
 
-Venue records load before teams because of the foreign key relationship.
+Venue records load before teams because of the foreign-key relationship.
 
 The current `live_matches` table stores team names rather than team IDs, so it does not yet have foreign keys to the `teams` table.
 
+Full table definitions are documented in the [Data Model](data-model.md).
+
 ## Staging Layer
 
-CSV files provide a transparent staging layer between the API and MySQL.
+CSV files provide a visible staging layer between the API and MySQL.
 
 This makes it possible to:
 
-* Inspect extracted data before loading
-* Validate record counts
-* Identify missing or malformed values
-* Reproduce database loads without another API request
-* Compare API output between pipeline runs
+- Inspect extracted data before loading
+- Validate record counts
+- Identify missing or malformed values
+- Reproduce database loads without another API request
+- Compare API output between pipeline runs
 
-### Why files instead of a staging table?
+### Why use CSV files?
 
-CSVs keep the staging layer simple, portable, and database-independent. Anyone can inspect or compare them without connecting to MySQL.
+CSV files keep the staging layer simple, portable, and database-independent.
 
-The tradeoff is that CSV files do not enforce schemas, support concurrent writes, or provide transactional guarantees. For this pipeline’s current size of 420 staged rows, the simplicity is worth the tradeoff.
+The tradeoff is that CSV files do not enforce schemas, support concurrent writes, or provide transactional guarantees.
 
-A database staging layer or raw object storage would become more appropriate as data volume, write frequency, or the number of data sources increases.
+For the project’s current size of 420 staged rows, CSV files provide a simple and practical staging layer.
 
-## Validation
+A database staging layer or object storage would become more appropriate as data volume, execution frequency, or the number of data sources increases.
 
-The pipeline checks:
+## Validation Layers
 
-* Required environment variables
-* HTTP response status
-* API error responses
-* Expected response structure
-* Required CSV columns
-* Valid fixture, team, and venue IDs
-* Duplicate API IDs
-* Missing team names
-* Missing venue relationships
-* Invalid dates and numeric values
+The pipeline validates data at several stages.
 
-A failed validation stops the affected step.
+### API validation
+
+The extraction scripts check:
+
+- Required environment variables
+- HTTP response status
+- API error responses
+- Expected response structure
+
+### CSV validation
+
+The extraction and loading scripts check:
+
+- Required columns
+- Valid fixture, team, and venue IDs
+- Duplicate IDs
+- Missing team names
+- Invalid dates
+- Invalid numeric values
+- Missing venue relationships
+
+### Post-load validation
+
+After loading finishes, `validate_data_quality.py` queries MySQL and verifies row counts, identifiers, scores, duplicates, and relationships.
+
+A failed validation raises an error and causes the pipeline run to fail.
 
 ## Idempotent Loading
 
@@ -144,23 +267,24 @@ The pipeline uses MySQL UPSERT operations.
 
 This means rerunning the pipeline:
 
-* Does not create duplicate fixtures
-* Does not create duplicate teams
-* Does not create duplicate venues
-* Updates records when API values change
+- Does not create duplicate fixtures
+- Does not create duplicate teams
+- Does not create duplicate venues
+- Updates records when API values change
 
-Duplicate protection is enforced through primary and unique keys.
+Duplicate protection is also enforced through primary keys and unique constraints.
 
 ## Transactions and Failure Handling
 
-Each loader commits its changes only after the full batch succeeds.
+Each loader commits its changes only after its full batch succeeds.
 
 If a database error occurs:
 
 1. The transaction is rolled back.
 2. The database connection is closed.
 3. The error is raised.
-4. `run_pipeline.py` stops the remaining pipeline steps.
+4. The current task fails.
+5. Airflow prevents dependent tasks from running.
 
 This prevents partially loaded batches.
 
@@ -168,18 +292,20 @@ The team and venue loader handles both tables in one transaction. If either tabl
 
 The match loader uses a separate transaction because it runs as a separate pipeline step.
 
+When Airflow runs the pipeline, failed tasks can retry up to two times with a five-minute delay.
+
 ## Security
 
 Secrets are stored in the local `.env` file, which Git ignores.
 
-The pipeline connects with the restricted `soccer_app` account.
+The pipeline connects to MySQL using the restricted `soccer_app` account.
 
 The application account only receives:
 
-* `SELECT`
-* `INSERT`
-* `UPDATE`
-* `DELETE`
+- `SELECT`
+- `INSERT`
+- `UPDATE`
+- `DELETE`
 
 Schema creation and migrations require a separate MySQL administrator account.
 
@@ -187,20 +313,22 @@ This prevents the pipeline from accidentally creating, dropping, or altering tab
 
 ## Current Limitations
 
-* Fixture records store team names instead of team foreign keys.
-* The pipeline performs a full extraction on every run. It currently makes two API requests—one for 380 fixtures and one for 20 team records—and rewrites all three CSV files even when nothing changed. This uses API quota and repeats unnecessary processing, which will matter once the pipeline runs frequently on a schedule.
-* Pipeline runs are logged to the console but not stored in a monitoring table.
-* Retries and scheduling are not yet automated.
-* Raw API JSON is not stored separately from transformed CSV data.
+- Fixture records store team names instead of team foreign keys.
+- The pipeline performs a full extraction on every run.
+- The Airflow DAG must be triggered manually because `schedule=None`.
+- The row-count checks are fixed to the 2024 Premier League season.
+- Pipeline runs are not stored in a separate business-monitoring table.
+- Raw API JSON is not stored separately from transformed CSV data.
+- The MySQL database runs outside the Airflow Docker Compose environment.
 
 ## Planned Improvements
 
-* Add home and away team foreign keys to fixtures
-* Add incremental fixture extraction
-* Add data-quality tests
-* Add pipeline run logging and freshness checks
-* Add retry and rate-limit handling
-* Schedule runs with Airflow
-* Containerize the pipeline with Docker
-* Store raw API responses in Amazon S3
-* Deploy MySQL to Amazon RDS
+- Add home and away team foreign keys to fixtures
+- Add incremental fixture extraction
+- Add automated unit and integration tests
+- Add pipeline run logging and freshness checks
+- Add API rate-limit handling
+- Add an Airflow schedule
+- Store raw API responses in Amazon S3
+- Deploy MySQL to Amazon RDS
+- Add standings, player statistics, and match events

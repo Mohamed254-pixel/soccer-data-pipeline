@@ -1,16 +1,16 @@
 # Data Model
 
-*Last reviewed: 2026-08-21*
+*Last reviewed: 2026-10-08*
 
 ## Overview
 
 The Premier League pipeline currently stores data in three MySQL tables:
 
-* `live_matches`
-* `teams`
-* `venues`
+- `live_matches`
+- `teams`
+- `venues`
 
-The team and venue tables have a foreign key relationship. The match table currently stores team names and has not yet been connected to the teams table through foreign keys.
+The team and venue tables have a foreign-key relationship. The match table currently stores team names and has not yet been connected to the teams table through foreign keys.
 
 ## Entity Relationship Diagram
 
@@ -69,11 +69,11 @@ Stores Premier League fixture dates, team names, and scores.
 
 ### Keys and indexes
 
-* Primary key: `fixture_id`
-* Unique key: `uq_live_fixture (match_date, home_team, away_team)`
-* Index: `idx_live_match_date`
-* Index: `idx_live_home_team`
-* Index: `idx_live_away_team`
+- Primary key: `fixture_id`
+- Unique key: `uq_live_fixture (match_date, home_team, away_team)`
+- Index: `idx_live_match_date`
+- Index: `idx_live_home_team`
+- Index: `idx_live_away_team`
 
 The API fixture ID provides the main duplicate protection.
 
@@ -83,11 +83,11 @@ The date, home team, and away team unique key provides a second safeguard agains
 
 When `fixture_id` already exists, the loader updates:
 
-* Match date
-* Home team
-* Away team
-* Home goals
-* Away goals
+- Match date
+- Home team
+- Away team
+- Home goals
+- Away goals
 
 This allows unfinished fixtures to be updated when scores become available.
 
@@ -107,8 +107,8 @@ Stores stadium information returned with API-FOOTBALL team data.
 
 ### Keys and indexes
 
-* Primary key: `venue_id`
-* Index: `idx_venues_city`
+- Primary key: `venue_id`
+- Index: `idx_venues_city`
 
 ### UPSERT behavior
 
@@ -134,13 +134,13 @@ Stores Premier League club identity, metadata, and venue relationships.
 
 ### Keys and indexes
 
-* Primary key: `team_id`
-* Unique key: `uq_teams_api_team_id (api_team_id)`
-* Unique key: `uq_team_name_league (team_name, league)`
-* Index: `idx_teams_venue_id`
-* Foreign key: `fk_teams_venue`
+- Primary key: `team_id`
+- Unique key: `uq_teams_api_team_id (api_team_id)`
+- Unique key: `uq_team_name_league (team_name, league)`
+- Index: `idx_teams_venue_id`
+- Foreign key: `fk_teams_venue`
 
-### Foreign key behavior
+### Foreign-key behavior
 
 ```text
 teams.venue_id → venues.venue_id
@@ -159,14 +159,14 @@ If a venue is deleted, the team remains in the database and its `venue_id` becom
 
 ### UPSERT behavior
 
-When either the API team ID or team-and-league combination already exists, the loader updates the team details rather than inserting a duplicate row.
+When either the API team ID or team-and-league combination already exists, the loader updates the team details instead of inserting a duplicate row.
 
 ## Internal and External IDs
 
 The teams table uses two identifiers:
 
-* `team_id` is an internal MySQL-generated surrogate key.
-* `api_team_id` is the external identifier assigned by API-FOOTBALL.
+- `team_id` is an internal MySQL-generated surrogate key.
+- `api_team_id` is the external identifier assigned by API-FOOTBALL.
 
 Keeping both allows the database to maintain its own stable internal relationships while preserving the source-system identifier for API updates.
 
@@ -174,17 +174,23 @@ The venue and match tables currently use their API identifiers directly as prima
 
 ## Load Order
 
-The team and venue loader writes records in this order:
+The pipeline writes records in this order:
 
 ```text
 venues
    ↓
 teams
+   ↓
+live_matches
+   ↓
+post-load quality checks
 ```
 
 Venues must exist before teams because the team table contains the foreign key.
 
-The loader validates the relationship before opening the database connection.
+The team and venue loader validates the relationship before opening the database connection.
+
+After all tables are loaded, the data-quality script validates the records stored in MySQL.
 
 ## CSV-to-Table Mapping
 
@@ -204,16 +210,64 @@ The loader validates the relationship before opening the database connection.
 
 All 20 non-null team venue references currently match a row in the venues table.
 
+## Post-Load Data Quality Checks
+
+After all three tables are loaded, `scripts/validate_data_quality.py` queries MySQL and verifies:
+
+- 380 match records exist
+- 20 team records exist
+- 20 venue records exist
+- Fixture IDs contain no duplicates
+- Fixture IDs are not missing
+- Team API IDs are not missing
+- Match scores are not missing
+- Match scores are not negative
+- Every team venue reference matches an existing venue
+
+The database schema allows match scores to be null because unfinished fixtures may not have final scores. However, the current 2024 dataset contains completed fixtures, so the post-load validation expects every score to be present.
+
+Each check prints `PASS` or `FAIL`.
+
+A failed check raises an error and causes the Airflow `validate_data_quality` task and DAG run to fail.
+
+## Data Integrity Controls
+
+The project protects data at both the database and application levels.
+
+### Database controls
+
+MySQL enforces:
+
+- Primary keys for unique record identification
+- Unique constraints for duplicate prevention
+- A foreign key between teams and venues
+- Unsigned numeric types for IDs, capacities, and scores
+- Indexes for common lookup columns
+
+### Application controls
+
+The Python scripts enforce:
+
+- Required CSV columns
+- Expected record counts
+- Valid IDs
+- Duplicate checks
+- Missing-value checks
+- Nonnegative score checks
+- Valid team-to-venue relationships
+
+These controls work together. Python catches invalid data during the pipeline, while MySQL protects the stored tables.
+
 ## Current Normalization Gap
 
 The match table stores `home_team` and `away_team` as text.
 
 This creates several limitations:
 
-* Team names are repeated across fixture rows.
-* A team name change must be updated in multiple records.
-* The database cannot enforce that every fixture team exists in `teams`.
-* Joins depend on exact team-name matching.
+- Team names are repeated across fixture rows.
+- A team-name change must be updated in multiple records.
+- The database cannot enforce that every fixture team exists in `teams`.
+- Joins depend on exact team-name matching.
 
 The planned normalized design will add:
 
@@ -232,18 +286,18 @@ The existing team-name columns can then be removed or retained only as source sn
 
 `001_align_live_matches_schema.sql`:
 
-* Replaced the generated match ID with the API fixture ID
-* Changed the fixture ID to `BIGINT UNSIGNED`
-* Changed goal columns to `SMALLINT UNSIGNED`
-* Added the fixture uniqueness constraint
-* Added match-date and team-name indexes
+- Replaced the generated match ID with the API fixture ID
+- Changed the fixture ID to `BIGINT UNSIGNED`
+- Changed goal columns to `SMALLINT UNSIGNED`
+- Added the fixture uniqueness constraint
+- Added match-date and team-name indexes
 
 ### Migration 002
 
 `002_add_team_and_venue_schema.sql`:
 
-* Added the venues table
-* Added API identity and metadata columns to teams
-* Added unique team constraints
-* Added the team-to-venue foreign key
-* Added supporting indexes
+- Added the venues table
+- Added API identity and metadata columns to teams
+- Added unique team constraints
+- Added the team-to-venue foreign key
+- Added supporting indexes
