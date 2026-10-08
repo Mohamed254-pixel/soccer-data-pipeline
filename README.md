@@ -24,7 +24,7 @@ The completed pipeline produced:
 
 - Zero duplicate fixture IDs
 - Zero broken team-to-venue relationships
-- One successful four-task Airflow DAG run
+- One successful five-task Airflow DAG run
 - Repeatable MySQL loads using UPSERT logic
 
 This project is scoped to the Premier League. Old international and mixed-league prototype data has been removed.
@@ -55,6 +55,8 @@ extract_teams_and_venues
 load_teams_and_venues
       ↓
 load_matches
+      ↓
+validate_data_quality
 ```
 
 Docker Compose runs the Airflow services, including the API server, scheduler, worker, DAG processor, triggerer, PostgreSQL metadata database, and Redis.
@@ -104,6 +106,7 @@ The match table currently stores home and away team names. Replacing them with t
 - Shared Docker storage for staged pipeline data
 - Credentials stored outside the source code
 - Separate administrator and application database permissions
+- Post-load checks for row counts, duplicates, missing IDs, invalid scores, and broken relationships
 
 Before loading teams, the pipeline checks that every non-null `venue_id` in `teams.csv` exists in `venues.csv`. Missing referenced IDs stop the load before any database write.
 
@@ -433,7 +436,8 @@ soccer-data-pipeline/
 │   ├── api_teams.py
 │   ├── db.py
 │   ├── load_live_matches.py
-│   └── load_teams.py
+│   ├── load_teams.py
+│   └── validate_data_quality.py
 ├── sql/
 │   ├── migrations/
 │   ├── analytics.sql
@@ -453,7 +457,6 @@ The `config/airflow.cfg` file and Airflow `logs/` directory are generated locall
 
 ## Roadmap
 
-- Add an Airflow data-quality validation task
 - Replace match team names with team foreign keys
 - Add incremental loading
 - Add a weekly Airflow schedule
