@@ -19,6 +19,7 @@ import requests
 from db import get_connection
 import incremental as etl
 import migrate_phase2 as migration
+import source_ids
 from season_store import assert_historical_snapshot
 
 
@@ -28,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def check_secrets(values):
     jwt = values.get("AIRFLOW__API_AUTH__JWT_SECRET", "")
     jwt_ok = (len(jwt) >= 32 and not jwt.startswith(("replace_", "your_"))
-              and jwt not in {"airflow_jwt_secret", values.get("FERNET_KEY"), values.get("API_KEY")})
+              and jwt not in {"airflow_jwt_secret", values.get("FERNET_KEY"), values.get("API_KEY"), values.get("FOOTBALL_DATA_API_KEY")})
     try:
         fernet_ok = len(base64.b64decode(values.get("FERNET_KEY", ""), altchars=b"-_", validate=True)) == 32
     except (ValueError, TypeError):
@@ -51,14 +52,26 @@ def check_database():
         migration.preflight(cursor)
         enabled = False
         pending = False
+        registry_ready = False
+        bindings = {}
         if metadata:
             migration.validate_schema(cursor, metadata=True, complete=True)
             cursor.execute("SELECT enabled,pending_run_id FROM pipeline_control WHERE control_id=1")
             row = cursor.fetchone()
             enabled = bool(row and row["enabled"])
             pending = bool(row and row["pending_run_id"])
+            if "source_registry_state" in migration.tables_present(cursor):
+                import migrate_sources
+                migrate_sources.validate(cursor)
+                migrate_sources.verify_registry(cursor)
+                cursor.execute("SELECT ready FROM source_registry_state WHERE control_id=1")
+                state = cursor.fetchone()
+                registry_ready = bool(state and state["ready"])
+                cursor.execute("SELECT season,provider FROM season_sources")
+                bindings = {str(row["season"]):row["provider"] for row in cursor.fetchall()}
         return {"connected": True, "archive_matches": True, "counts": counts,
-                "migration_003_applied": metadata, "pipeline_enabled": enabled, "pending_run": pending}
+                "migration_003_applied": metadata, "pipeline_enabled": enabled, "pending_run": pending,
+                "source_registry_ready": registry_ready, "season_sources": bindings}
     finally:
         try:
             if cursor is not None:
@@ -107,6 +120,27 @@ def check_api(seasons):
             exc.readiness_details = details
             raise
     return details
+
+
+def check_football_data(seasons):
+    import football_data
+    client = football_data.Client()
+    verified = []
+    for season in seasons:
+        matches = football_data.parse_matches(client.request("competitions/PL/matches", {"season":season,"matchday":1}),season)
+        if not matches:
+            raise RuntimeError("No season sample available; fixture access is unconfirmed.")
+        football_data.team_batch(client.request("competitions/PL/teams", {"season":season}),season)
+        verified.append(season)
+    return {"provider":source_ids.FD,"verified_seasons":verified}
+
+
+def source_configuration_ready(database, provider, seasons):
+    if provider not in {source_ids.API,source_ids.FD}:
+        return False
+    if provider == source_ids.FD and not database.get("source_registry_ready"):
+        return False
+    return all(database.get("season_sources",{}).get(str(season),provider)==provider for season in seasons)
 
 
 def check_docker():
@@ -161,7 +195,9 @@ def main():
     os.environ["PIPELINE_ENV_FILE"] = str(args.env_file)
     load_dotenv(args.env_file)
     report = {"environment_file_present": args.env_file.is_file(), **check_secrets(os.environ)}
-    report["api_key_configured"] = bool(os.getenv("API_KEY"))
+    provider = os.getenv("FOOTBALL_SOURCE",source_ids.API)
+    report["provider"] = provider
+    report["api_key_configured"] = bool(os.getenv("FOOTBALL_DATA_API_KEY" if provider == source_ids.FD else "API_KEY"))
     report["docker"] = check_docker()
     report["compose_runtime_config_valid"] = check_compose(args.env_file)
     report["airflow_services"] = (check_services(args.env_file) if report["docker"]["daemon_running"]
@@ -176,7 +212,9 @@ def main():
                               for value in os.getenv("FOOTBALL_SEASONS", "2026").split(",")})
             if 2024 in seasons or os.getenv("FOOTBALL_LEAGUE_ID", "39") != "39":
                 raise ValueError("Invalid refresh season or league configuration.")
-            report["api"] = check_api(seasons)
+            if provider not in {source_ids.API,source_ids.FD}:
+                raise ValueError("Unknown source provider.")
+            report["api"] = check_football_data(seasons) if provider == source_ids.FD else check_api(seasons)
         except (requests.RequestException, ValueError, RuntimeError, KeyError, TypeError) as exc:
             # Never print HTTP response bodies, account records, or key values.
             report["api"] = {**getattr(exc, "readiness_details", {}), "ready": False, "error_type": type(exc).__name__}
@@ -188,12 +226,16 @@ def main():
         report["api"] = {"checked": False}
     report["production_services_started"] = False
     report["live_ingestion_run"] = False
-    print(json.dumps(report, indent=2, default=str))
     database = report.get("database", {})
+    report["source_configuration_ready"] = source_configuration_ready(database,provider,report["api"].get("verified_seasons",[]))
+    print(json.dumps(report, indent=2, default=str))
     ready = all(report[key] for key in ("environment_file_present", "jwt_secret_ready", "fernet_key_ready", "compose_runtime_config_valid"))
     ready = ready and report["docker"]["daemon_running"] and database.get("pipeline_enabled") and not database.get("pending_run")
     ready = ready and report["airflow_services"]["all_healthy"]
+    if provider == source_ids.FD:
+        ready = ready and database.get("source_registry_ready")
     ready = ready and bool(report["api"].get("verified_seasons"))
+    ready = ready and report["source_configuration_ready"]
     return 0 if ready else 1
 
 
