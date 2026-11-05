@@ -19,6 +19,13 @@ def indexes(cursor, table):
     return result
 
 
+def normalize_check(expression):
+    # MySQL versions differ in quoting, parentheses and charset introducers.
+    value = expression.lower().replace('\\', '')
+    value = re.sub(r"_[a-z0-9]+(?=')", '', value)
+    return re.sub(r'[\s`()]+', '', value)
+
+
 def validate(cursor):
     if not TABLES <= phase2.tables_present(cursor):
         raise ValueError('Source registry tables are incomplete.')
@@ -72,6 +79,16 @@ def validate(cursor):
         ddl = cursor.fetchone()['Create Table'].replace(' ', '').lower()
         if any(part.replace(' ', '').lower() not in ddl for part in parts) or 'notenforced' in ddl:
             raise ValueError('Source registry constraint mismatch.')
+    expected_checks = {'chk_archive_source': "season<>2024 OR provider='api_football'"}
+    for kind, offset in [('team',2147483648),('fixture',9223372036854775808)]:
+        expected_checks[f'chk_{kind}_namespace'] = (
+            f"source_id>0 AND source_id<{offset} AND "
+            f"((provider='api_football' AND canonical_id=source_id) OR "
+            f"(provider='football_data' AND canonical_id=source_id+{offset}))")
+    cursor.execute('SELECT CONSTRAINT_NAME,CHECK_CLAUSE FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()')
+    checks = {r['CONSTRAINT_NAME']:normalize_check(r['CHECK_CLAUSE']) for r in cursor.fetchall()}
+    if any(checks.get(name) != normalize_check(value) for name,value in expected_checks.items()):
+        raise ValueError('Source registry CHECK constraint expression mismatch.')
 
 
 def preflight(cursor):

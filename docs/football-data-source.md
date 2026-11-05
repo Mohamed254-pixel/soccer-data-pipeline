@@ -59,13 +59,13 @@ The application account needs INSERT/SELECT/UPDATE on the new mapping/binding ta
 
 ## Verification and safe activation
 
-Automated verification uses mocked HTTP payloads and a separate socket-only disposable MySQL server. It covers the complete five stages, POSTPONED-to-FINISHED corrections, completed-run retries, colliding historical raw IDs/names, multi-season checkpoints, API-FOOTBALL compatibility after 004, schema drift/constraints, migration up/down/reapply/resume, and unchanged historical values. CI runs Python 3.11 with MySQL 8.0 and actual Airflow 3.3.1 imports. The follow-up PR targets `feature/phase2-incremental-etl` as requested; PR #6 itself was already merged earlier with owner approval. Nothing in this follow-up is merged automatically.
+Automated verification uses mocked HTTP payloads and a separate socket-only disposable MySQL server. It covers the complete five stages, POSTPONED-to-FINISHED corrections, completed-run retries, colliding historical raw IDs/names, multi-season checkpoints, API-FOOTBALL compatibility after 004, schema drift/constraints, migration up/down/reapply/resume, and unchanged historical values. CI runs Python 3.11 with MySQL 8.0 and actual Airflow 3.3.1 imports. PR #7 now targets `main` after confirming that main contains the complete Phase 2 base; PR #6 was already merged earlier with owner approval. PR #7 remains unmerged. See [the final review](pr7-review.md).
 
 No application migration, live ingestion, credential rotation, service startup, subscription purchase, or volume removal is part of this implementation. The earlier limited live probes verified 2026–27 match/team access; they do not establish that this new adapter has ingested or validated a live database batch. A real ingestion run remains unapproved/unperformed.
 
 Activation order:
 
-1. Review this PR and approve its merge separately. Since #6 is already merged, integrating the updated Phase 2 feature branch into main requires a subsequent reviewed PR; this follow-up alone does not update main.
+1. Review PR #7 against main and approve its merge separately. Its base was verified and retargeted; no further intermediary feature-branch merge is needed.
 2. Preserve the private API keys and Fernet/JWT secrets. Set `FOOTBALL_SOURCE=football_data` and `FOOTBALL_SEASONS=2026` explicitly for the intended runtime. Do not silently replace `API_KEY` with the football-data token. Keep one shared durable staging directory and the existing Compose project/volumes.
 3. Follow the [backup/restore verification procedure](phase2-activation.md): pause/stop writers, take a private backup, restore it into an isolated compatible server, compare all historical values/IDs/schema, and retain recovery evidence. No application backup restoration was executed by these tests.
 4. Obtain approval for migrations. Run 003 preflight/apply only if not already applied, then 004 preflight/apply. Recheck original 380 matches / 20 teams / 20 venues and all original values immediately afterward. Inspect schema/registry readiness and source bindings. Never bypass drift, namespace, or pending-run guards.

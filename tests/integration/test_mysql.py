@@ -570,3 +570,14 @@ def test_readonly_readiness_validates_source_registry_and_bindings(mysql_databas
     assert result['archive_matches'] and result['source_registry_ready']
     assert result['season_sources']=={'2024':'api_football'}
     assert result['counts']['live_matches']=={'total':380,'unique_ids':380}
+
+
+def test_registry_reapply_rejects_weakened_check_with_same_name(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('ALTER TABLE team_source_ids DROP CHECK chk_team_namespace, ADD CONSTRAINT chk_team_namespace CHECK (source_id>0 AND source_id<2147483648 AND 2147483648=2147483648)')
+    connection.commit()
+    with pytest.raises(ValueError,match='CHECK constraint expression'):
+        migrate_sources.apply(connection,cursor)
