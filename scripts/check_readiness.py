@@ -27,7 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def check_secrets(values):
     jwt = values.get("AIRFLOW__API_AUTH__JWT_SECRET", "")
-    jwt_ok = len(jwt) >= 32 and not jwt.startswith(("replace_", "your_")) and jwt != "airflow_jwt_secret"
+    jwt_ok = (len(jwt) >= 32 and not jwt.startswith(("replace_", "your_"))
+              and jwt not in {"airflow_jwt_secret", values.get("FERNET_KEY"), values.get("API_KEY")})
     try:
         fernet_ok = len(base64.b64decode(values.get("FERNET_KEY", ""), altchars=b"-_", validate=True)) == 32
     except (ValueError, TypeError):
@@ -83,7 +84,11 @@ def check_api(seasons):
     if remaining < 6 * len(seasons):
         raise RuntimeError("Insufficient remaining API quota for the read-only season probes.")
     verified = []
-    details = {"subscription_active": True, "quota_remaining_before_probes": remaining, "verified_seasons": verified}
+    # Emit only known public plan labels, never arbitrary provider/account text.
+    plan = status["subscription"].get("plan")
+    plan = plan if isinstance(plan, str) and plan in {"Free", "Pro", "Ultra", "Mega", "Custom"} else "unreported"
+    details = {"subscription_active": True, "subscription_plan": plan,
+               "quota_remaining_before_probes": remaining, "verified_seasons": verified}
     for season in seasons:
         try:
             leagues = etl.request_api("leagues", {"id": 39, "season": season})

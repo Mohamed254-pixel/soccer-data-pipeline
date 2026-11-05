@@ -32,6 +32,12 @@ def test_secret_check_rejects_empty_and_documented_defaults():
     assert result == {"jwt_secret_ready": True, "fernet_key_ready": True}
 
 
+@pytest.mark.parametrize("other_name", ["FERNET_KEY", "API_KEY"])
+def test_jwt_must_be_independent_of_other_credentials(other_name):
+    value = base64.urlsafe_b64encode(b"0" * 32).decode()
+    assert not readiness.check_secrets({"AIRFLOW__API_AUTH__JWT_SECRET": value, other_name: value})["jwt_secret_ready"]
+
+
 def api_response(status=200, payload=None, retry_after=None):
     response = Mock(status_code=status)
     response.headers = {} if retry_after is None else {"Retry-After": retry_after}
@@ -112,7 +118,28 @@ def test_api_readiness_keeps_partial_subscription_evidence_without_exposing_resp
     monkeypatch.setattr(etl, "request_api", get)
     with pytest.raises(etl.APIResponseError) as exc:
         readiness.check_api([2026])
-    assert exc.value.readiness_details == {"subscription_active": True, "quota_remaining_before_probes": 90, "verified_seasons": []}
+    assert exc.value.readiness_details == {"subscription_active": True, "subscription_plan": "unreported",
+                                         "quota_remaining_before_probes": 90, "verified_seasons": []}
+
+
+@pytest.mark.parametrize("plan,reported", [("Free", "Free"), ("sensitive-account-text", "unreported")])
+def test_readiness_reports_only_public_plan_names_on_http_200_plan_errors(monkeypatch, plan, reported):
+    monkeypatch.setenv("API_KEY", "test-only-key")
+    get = Mock(side_effect=[
+        api_response(payload={"errors": [], "response": {"subscription": {"active": True, "plan": plan},
+                     "requests": {"current": 0, "limit_day": 100}}}),
+        api_response(payload={"errors": {"plan": "sensitive-provider-text"}, "response": [], "results": 0}),
+    ])
+    monkeypatch.setattr(etl.requests, "get", get)
+    with pytest.raises(etl.APIResponseError) as exc:
+        readiness.check_api([2026])
+    assert exc.value.category == "plan_or_season_access"
+    assert exc.value.readiness_details["subscription_plan"] == reported
+    assert "sensitive" not in str(exc.value.readiness_details)
+    assert get.call_count == 2  # Fail before fixture probes; do not burn quota retrying plan errors.
+    for call in get.call_args_list:
+        assert call.kwargs["headers"] == {"x-apisports-key": "test-only-key"}
+    assert get.call_args.kwargs["params"] == {"id": 39, "season": 2026}
 
 
 def test_readiness_does_not_probe_seasons_when_quota_is_low(monkeypatch):

@@ -8,6 +8,8 @@ The project preserves its **2024–25 archive** and supports weekly updates for 
 
 See the [engineering review and activation runbook](docs/engineering-review.md) for verified results and unresolved deployment blockers. Phase 2 is not activated on the application database.
 
+The [activation investigation](docs/phase2-activation.md) confirms the current key's Free-plan season restriction and records the private JWT fix, current readiness, and backup/restore verification procedure. No subscription purchase or live ingestion has been performed.
+
 ## Scope and current data
 
 | Dataset | Matches | Teams | Venues |
