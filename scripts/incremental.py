@@ -5,6 +5,8 @@ The 2024 snapshot is protected. Season identifiers are starting years (2026 =
 """
 
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation
 import hashlib
 import json
@@ -12,6 +14,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+from time import sleep
 
 from dotenv import load_dotenv
 import mysql.connector
@@ -30,6 +33,13 @@ STAGES = ("extract_matches", "extract_teams_and_venues", "load_teams_and_venues"
           "load_matches", "validate_data_quality")
 
 
+class APIResponseError(RuntimeError):
+    """Safe category only: upstream error values may contain account secrets."""
+    def __init__(self, category):
+        self.category = category
+        super().__init__(f"API-FOOTBALL rejected the request ({category}).")
+
+
 def integer(value, name, minimum=0, nullable=False, maximum=4294967295):
     if value is None and nullable:
         return None
@@ -45,7 +55,13 @@ def integer(value, name, minimum=0, nullable=False, maximum=4294967295):
 
 
 def utc_datetime(value):
-    parsed = pd.to_datetime(value, errors="raise", utc=True)
+    if not isinstance(value, (str, datetime)):
+        raise ValueError("A timestamp string or datetime is required.")
+    try:
+        parsed = pd.to_datetime(value, errors="raise", utc=True)
+    except (ValueError, TypeError, OverflowError):
+        # pandas errors can echo the source value. Never log untrusted payloads.
+        raise ValueError("Invalid UTC timestamp.") from None
     if pd.isna(parsed):
         raise ValueError("A valid timestamp is required.")
     return parsed.to_pydatetime().replace(tzinfo=None)
@@ -72,19 +88,66 @@ def settings():
             "reconcile_days": integer(os.getenv("FULL_RECONCILE_DAYS", "28"), "reconciliation days", 7, maximum=365)}
 
 
-def request_api(endpoint, params):
+def request_payload(endpoint, params):
+    """Bounded retries for transient transport/HTTP failures, never API errors."""
     key = os.getenv("API_KEY")
     if not key:
         raise RuntimeError("API_KEY is missing.")
-    response = requests.get("https://v3.football.api-sports.io/" + endpoint,
-                            headers={"x-apisports-key": key}, params=params, timeout=30)
-    response.raise_for_status()
+    for attempt in range(3):
+        try:
+            response = requests.get("https://v3.football.api-sports.io/" + endpoint,
+                                    headers={"x-apisports-key": key}, params=params, timeout=30)
+            response.raise_for_status()
+            break
+        except (requests.Timeout, requests.ConnectionError, requests.HTTPError) as exc:
+            failed_response = getattr(exc, "response", None)
+            if isinstance(exc, requests.HTTPError) and (
+                failed_response is None or failed_response.status_code not in {429, 500, 502, 503, 504}
+            ):
+                raise
+            delay = retry_delay(attempt, failed_response)
+            if attempt == 2 or delay is None:
+                raise
+            sleep(delay)
     try:
         payload = response.json()
     except ValueError as exc:
         raise RuntimeError("API-FOOTBALL returned invalid JSON.") from exc
-    if not isinstance(payload, dict) or payload.get("errors"):
+    if not isinstance(payload, dict):
         raise RuntimeError("API-FOOTBALL returned an error or an invalid response object.")
+    errors = payload.get("errors")
+    if errors:
+        keys = set(errors) if isinstance(errors, dict) else set()
+        category = "api_error"
+        for names, label in [({"plan", "season", "subscription"}, "plan_or_season_access"),
+                             ({"requests", "rateLimit"}, "quota_or_rate_limit"),
+                             ({"token", "key", "apikey"}, "authentication")]:
+            if keys.intersection(names):
+                category = label
+                break
+        raise APIResponseError(category)
+    return payload
+
+
+def retry_delay(attempt, response):
+    delay = 2 ** attempt
+    if response is not None:
+        value = response.headers.get("Retry-After")
+        if value:
+            try:
+                delay = max(0, float(value))
+            except (TypeError, ValueError):
+                try:
+                    date = parsedate_to_datetime(value)
+                    delay = max(0, (date - datetime.now(timezone.utc)).total_seconds())
+                except (TypeError, ValueError, OverflowError):
+                    pass
+    # Longer provider waits are left to Airflow's five-minute task retry.
+    return delay if delay <= 30 else None
+
+
+def request_api(endpoint, params):
+    payload = request_payload(endpoint, params)
     values = payload.get("response")
     if not isinstance(values, list):
         raise RuntimeError("API-FOOTBALL response must be a list.")
@@ -168,6 +231,10 @@ def extract_batch(config, states, pending, now):
             ids = [row["fixture_id"] for row in parsed]
             if len(ids) != len(set(ids)):
                 raise ValueError("Duplicate fixture IDs within one API response.")
+            if plan["full"]:
+                known = set((states[season] or {}).get("known_fixture_ids", []))
+                if known.difference(ids):
+                    raise ValueError("Full reconciliation omitted a known fixture. Check API completeness before retrying.")
             if "ids" in params and set(ids) != set(map(int, params["ids"].split("-"))):
                 raise ValueError("ID lookup omitted or added fixtures. Refusing an incomplete batch.")
             # Later ID lookups are newer observations of live/moved fixtures.
@@ -205,6 +272,20 @@ def read_manifest(config):
     return manifest
 
 
+@contextmanager
+def stage_lock(config):
+    """Serialize retries sharing a run manifest on macOS/Linux and Docker volumes."""
+    import fcntl
+    path = config["path"].with_suffix(".lock")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def match_rows(matches, observed_at):
     rows, ids = [], set()
     for record in matches:
@@ -225,6 +306,11 @@ def match_rows(matches, observed_at):
 
 
 def execute_stage(stage, config):
+    with stage_lock(config):
+        _execute_stage(stage, config)
+
+
+def _execute_stage(stage, config):
     if stage == "extract_matches":
         if config["path"].exists():
             # Airflow retries retain one frozen run observation, not a mixture of
@@ -233,7 +319,7 @@ def execute_stage(stage, config):
             print("Reusing this run's validated extraction batch.")
             return
         started_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        states, pending = store.extraction_state(config["seasons"], config["run_id"], started_at)
+        states, pending, started_at = store.extraction_state(config["seasons"], config["run_id"], started_at)
         manifest = extract_batch(config, states, pending, started_at)
         save_manifest(config, manifest)
         print(f"Staged {len(manifest['matches'])} fixtures for {config['seasons']}.")
@@ -256,6 +342,10 @@ def execute_stage(stage, config):
                 raise ValueError("Premier League season extraction requires 20 unique teams.")
             batches.append({"season": season, "teams": json.loads(teams.to_json(orient="records")),
                             "venues": json.loads(venues.to_json(orient="records"))})
+        memberships = {batch["season"]: {team["api_team_id"] for team in batch["teams"]} for batch in batches}
+        if any(row[key] not in memberships[row["season"]] for row in manifest["matches"]
+               for key in ("home_api_team_id", "away_api_team_id")):
+            raise ValueError("Fixture team IDs do not belong to the extracted season membership.")
         manifest["team_batches"] = batches
     elif stage == "load_teams_and_venues":
         store.load_team_batches(manifest, manifest["team_batches"], started_at)

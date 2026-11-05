@@ -201,7 +201,7 @@ def test_staging_is_atomic_and_rejects_other_run(monkeypatch, config, fixture_re
 
 
 def test_invalid_api_does_not_publish_or_load(monkeypatch, config):
-    monkeypatch.setattr(store, "extraction_state", Mock(return_value=({2026: None}, [])))
+    monkeypatch.setattr(store, "extraction_state", Mock(return_value=({2026: None}, [], NOW)))
     monkeypatch.setattr(etl, "request_api", Mock(side_effect=RuntimeError("API failure")))
     load = Mock()
     monkeypatch.setattr(store, "load_match_batch", load)
@@ -212,7 +212,7 @@ def test_invalid_api_does_not_publish_or_load(monkeypatch, config):
 
 
 def test_staging_retries_reuse_frozen_extraction(monkeypatch, config, fixture_record):
-    monkeypatch.setattr(store, "extraction_state", Mock(return_value=({2026: None}, [])))
+    monkeypatch.setattr(store, "extraction_state", Mock(return_value=({2026: None}, [], NOW)))
     get = Mock(return_value=[fixture_record])
     monkeypatch.setattr(etl, "request_api", get)
     etl.execute_stage("extract_matches", config)
@@ -296,3 +296,54 @@ def test_stage_failure_does_not_advance_staging(monkeypatch, config, fixture_rec
     with pytest.raises(ValueError, match="quality failed"):
         etl.execute_stage("validate_data_quality", config)
     assert etl.read_manifest(config)["stage"] == "load_matches"
+
+
+def test_full_reconciliation_cannot_omit_known_fixtures(monkeypatch, config, fixture_record):
+    state = {"last_success_at": NOW - timedelta(days=7),
+             "last_full_sync_at": NOW - timedelta(days=29),
+             "known_fixture_ids": [2000001, 2000002]}
+    monkeypatch.setattr(etl, "request_api", Mock(return_value=[fixture_record]))
+    with pytest.raises(ValueError, match="known fixture"):
+        etl.extract_batch(config, {2026: state}, [], NOW)
+
+
+def test_same_run_id_cannot_change_its_observation_time():
+    cursor = Mock()
+    cursor.fetchone.return_value = {"enabled": True, "pending_run_id": "same-run",
+                                    "pending_started_at": NOW,
+                                    "pending_lease_until": datetime(2100, 1, 1),
+                                    "last_completed_at": None, "last_completed_run_id": None}
+    with pytest.raises(RuntimeError, match="observation"):
+        store.lock_run(cursor, "same-run", NOW + timedelta(seconds=1), claim=True)
+
+
+def test_fixture_membership_is_validated_before_any_load(monkeypatch, config, fixture_record, team_frames):
+    import pandas as pd
+    monkeypatch.setattr(etl, "request_api", Mock(return_value=[fixture_record]))
+    manifest = etl.extract_batch(config, {2026: None}, [], NOW)
+    etl.save_manifest(config, manifest)
+    team, venues = team_frames
+    teams = pd.concat([team] * 20, ignore_index=True)
+    teams["api_team_id"] = range(100, 120)
+    monkeypatch.setattr(etl, "parse_teams_and_venues", Mock(return_value=(teams, venues)))
+    with pytest.raises(ValueError, match="season membership"):
+        etl.execute_stage("extract_teams_and_venues", config)
+    assert etl.read_manifest(config)["stage"] == "extract_matches"
+
+
+def test_duplicate_stage_processes_are_serialized(config):
+    import subprocess
+    import sys
+    code = """import fcntl, sys
+with open(sys.argv[1], 'a') as handle:
+    try:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        sys.exit(42)
+"""
+    path = str(config["path"].with_suffix(".lock"))
+    with etl.stage_lock(config):
+        result = subprocess.run([sys.executable, "-c", code, path], timeout=10)
+        assert result.returncode == 42
+    result = subprocess.run([sys.executable, "-c", code, path], timeout=10)
+    assert result.returncode == 0

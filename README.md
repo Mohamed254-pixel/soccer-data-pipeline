@@ -6,6 +6,8 @@ The project preserves its **2024–25 archive** and supports weekly updates for 
 
 [Repository](https://github.com/Mohamed254-pixel/premier-league-data-pipeline) · [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Migration and recovery](docs/phase2-migrations.md)
 
+See the [engineering review and activation runbook](docs/engineering-review.md) for verified results and unresolved deployment blockers. Phase 2 is not activated on the application database.
+
 ## Scope and current data
 
 | Dataset | Matches | Teams | Venues |
@@ -39,7 +41,7 @@ extract_matches
   → validate_data_quality
 ```
 
-Airflow uses `schedule="0 6 * * 1"`, UTC, `catchup=False`, two retries five minutes apart, and `max_active_runs=1`. Manual triggering remains available. A database run-owner guard also prevents a local runner from racing Airflow. Child stdout/stderr and failures remain visible in task logs.
+Airflow uses `schedule="0 6 * * 1"`, UTC, `catchup=False`, two retries five minutes apart, and `max_active_runs=1`. Tasks have a one-hour execution timeout; cancellation terminates their child processes. Manual triggering remains available. A database run-owner guard also prevents a local runner from racing Airflow. Child stdout/stderr and failures remain visible in task logs.
 
 ## Incremental strategy
 
@@ -48,6 +50,8 @@ Airflow uses `schedule="0 6 * * 1"`, UTC, `catchup=False`, two retries five minu
 3. Independently recheck overdue scheduled fixtures and uncertain/postponed/interrupted fixtures by ID, in batches of at most 20. Their original date can be outside the window.
 4. Reconcile the configured season in full every 28 days by default. This catches moved fixtures and older corrections that a date filter cannot reveal. The archived 2024 season is never automatically re-downloaded.
 5. Commit checkpoints only after the final quality step succeeds. A valid empty incremental window is a no-op; an empty bootstrap, API error, malformed response, or incomplete ID lookup fails the run.
+
+Full reconciliation must include every previously stored fixture ID for that season. Missing results fail before publishing the batch. Transport failures and transient HTTP errors retry up to three attempts with bounded backoff; authentication, subscription, and malformed-data failures require intervention or a later task retry.
 
 This is a weekly refresh, not a real-time scores service. Live scores/statuses are captured when a run polls them. Older corrections may wait until the next full active-season reconciliation. See the [API-FOOTBALL fixtures contract](https://www.api-football.com/documentation_v3).
 
@@ -109,11 +113,22 @@ Every step logs its start, success/failure, and duration. Any failure stops down
 
 ## Docker and Airflow
 
-Generate a Fernet key and put it in the private `.env`:
+For a new environment, generate independent Fernet and JWT keys and put them in the private `.env`. Preserve any existing Fernet key used to encrypt Airflow values:
 
 ```bash
 python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
+python -c 'import secrets; print(secrets.token_urlsafe(48))'
 ```
+
+The first value is `FERNET_KEY`, the second is `AIRFLOW__API_AUTH__JWT_SECRET`. Compose refuses missing keys. UI ports bind to loopback. This Compose stack retains local development metadata credentials and requires further access/security configuration before hosting publicly.
+
+Run read-only checks before requesting activation approval:
+
+```bash
+python scripts/check_readiness.py --env-file /private/path/runtime.env --api
+```
+
+This reads database integrity, Docker/Compose/service health, and small API entitlement probes; it consumes API quota but never starts services, migrates, stages data, or ingests fixtures. Exit zero requires all checks, including running healthy Airflow services, to pass. Before migration/startup, a nonzero result is expected. Omit `--api` to avoid HTTP probes; API readiness then remains unverified and the command exits nonzero.
 
 Start Docker Desktop, then:
 
@@ -163,7 +178,7 @@ python -m pytest
 
 For an isolated local server with networking disabled, set `PIPELINE_TEST_MYSQL_SOCKET` instead. Never point the test environment at an application account. The suite verifies migration up/down/resume, inserts and corrections, postponed fixtures, repeated runs, multiple seasons, duplicate/unique-key protection, failure handling, archive preservation, and the complete five-stage flow with a mocked API and real MySQL.
 
-[GitHub Actions](.github/workflows/tests.yml) runs Python 3.11 tests on pushes and pull requests to `main`. A second job runs the full suite against an ephemeral MySQL 8.0 service. Its test-only password is not an application secret. No API key or application credentials are needed.
+[GitHub Actions](.github/workflows/tests.yml) runs Python 3.11 tests on pushes and pull requests to `main`. A second job runs the full suite against an ephemeral MySQL 8.0 service. A third imports the actual Airflow 3.3.1 DAG and verifies task dependencies, schedule, retries, and timeouts with `python scripts/check_dag.py`. Its test-only database password is not an application secret. No API key or application credentials are needed.
 
 ## Recovery and troubleshooting
 
@@ -177,7 +192,7 @@ For an isolated local server with networking disabled, set `PIPELINE_TEST_MYSQL_
 - **Docker unavailable:** offline tests still work. A syntax-only Compose check needs no secrets or daemon:
 
 ```bash
-ENV_FILE_PATH=.env.example FERNET_KEY='' AIRFLOW_UID=50000 docker compose --env-file .env.example config --quiet
+python scripts/check_readiness.py --compose-example
 ```
 
 Run-scoped staging is retained for retries and audit. Archive old completed staging files only after confirming no active run needs them. Do not edit a pending batch; release it and start a fresh run instead.

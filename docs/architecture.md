@@ -30,6 +30,8 @@ API-FOOTBALL does not document an updated-since filter for fixtures, so a date w
 
 API responses must have the expected shape, matching result count when supplied, no reported errors, and no unexpected pagination. Each fixture must match the requested league and season. Empty date windows are valid no-ops; empty bootstrap/reconciliation and missing requested fixture IDs are failures. Duplicates within a single API response are rejected. A later explicit-ID observation supersedes an earlier window observation of the same fixture, which accommodates live state changing between HTTP calls.
 
+Full reconciliations additionally require all known stored fixture IDs to be returned. The team extraction stage checks fixture team IDs against the requested season's memberships before loading. HTTP timeouts/connection failures and 429/500/502/503/504 retry at most three attempts. Backoff honors Retry-After up to 30 seconds; longer waits propagate to the task retry. Permanent API errors are classified without echoing provider/account error values. Database connections have explicit connect/read/write timeouts.
+
 Weekly refresh is not real-time ingestion. Corrections outside the overlap can take until the next reconciliation to appear. Current-season subscription coverage must be checked before a live bootstrap; having a key alone is not sufficient.
 
 ## Staging and retries
@@ -37,6 +39,8 @@ Weekly refresh is not real-time ingestion. Corrections outside the overlap can t
 A hashed run ID selects an ignored JSON manifest in `data/staging/`. It contains the requested seasons, observation timestamp, plan, fixture records, team snapshots, and last successful stage. The completed extraction is atomically published only after validation, using a temporary file and rename. Files never replace `data/live_matches.csv`, `data/teams.csv`, or `data/venues.csv`.
 
 Retries use the frozen batch for the same run ID. They do not combine freshly fetched matches with already loaded teams. Stage markers are written after a database commit, so a process dying between the commit and marker write retries an idempotent load. Final checkpoint commits also remember the completed run ID to make that retry safe.
+
+An OS file lock serializes each manifest's stage operations. The database claim persists the observation timestamp before extraction; an extraction retry before manifest publication reuses it. Airflow tasks time out after one hour, terminate their child on cancellation, and retain the existing five-minute retry delay. The six-hour database lease remains longer than normal task execution. This is designed for the existing shared local Docker volume, not distributed object-store locking.
 
 Manifests must match the run ID, requested seasons, and version. Fixtures are revalidated before SQL preparation. Unknown future statuses fail explicitly rather than becoming an invented final result.
 
@@ -64,6 +68,6 @@ The DAG must be unpaused and scheduler/workers must remain running for automatic
 
 ## Verification and limitations
 
-The offline suite blocks unmocked HTTP/MySQL access and disables private dotenv loading. Opt-in real MySQL tests create fresh random test databases, seed the original archive, exercise migrations/upserts/transactions and the five-stage flow with a mocked API, then remove only their own test databases. GitHub Actions runs Python 3.11, with a separate full-suite MySQL 8.0 job.
+The offline suite blocks unmocked HTTP/MySQL access and disables private dotenv loading. Opt-in real MySQL tests create fresh random test databases, seed the original archive, exercise migrations/upserts/transactions and the five-stage flow with a mocked API, then remove only their own test databases. GitHub Actions runs Python 3.11, with separate full-suite MySQL 8.0 and actual Airflow 3.3.1 import jobs. `check_readiness.py` performs read-only environment checks without activating the ETL.
 
 Real API refresh and application-database migration are separate from automated tests. Mocked responses prove parsing/branch behavior, while real database tests verify SQL semantics; neither proves subscription access or live API completeness. The integrity check depends on retaining trusted archive CSVs. Team/venue snapshots are per season, not a full history of every metadata change within a season. Staging retention is manual. Monitoring, AWS, dbt, and other datasets remain future work.

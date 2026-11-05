@@ -24,4 +24,17 @@ def test_connection_configuration(monkeypatch, port):
     else:
         db.get_connection()
         connect.assert_called_once_with(host="localhost", port=int(port), user="test-user",
-                                        password="test-only-password", database="test-db")
+                                        password="test-only-password", database="test-db",
+                                        connection_timeout=15, read_timeout=60, write_timeout=60)
+
+
+@pytest.mark.parametrize("port", ["0", "-1", "65536"])
+def test_invalid_port_range_never_connects(monkeypatch, port):
+    for key in ("DB_HOST", "DB_USER", "DB_PASSWORD", "DB_NAME"):
+        monkeypatch.setenv(key, "test-only")
+    monkeypatch.setenv("DB_PORT", port)
+    connect = Mock()
+    monkeypatch.setattr(db.mysql.connector, "connect", connect)
+    with pytest.raises(RuntimeError, match="between 1 and 65535"):
+        db.get_connection()
+    connect.assert_not_called()

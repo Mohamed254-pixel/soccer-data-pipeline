@@ -66,13 +66,22 @@ def require_schema(cursor):
 def extraction_state(seasons, run_id, started_at):
     with database(write=True) as cursor:
         require_schema(cursor)
+        cursor.execute("SELECT * FROM pipeline_control WHERE control_id=1 FOR UPDATE")
+        owner = cursor.fetchone()
+        if owner and owner["pending_run_id"] == run_id:
+            if owner["pending_started_at"] is None:
+                raise RuntimeError("Pending run has no observation timestamp. Inspect its state before retrying.")
+            started_at = owner["pending_started_at"]
         # Claim the entire ETL before contacting the source. This also prevents
         # local extraction from racing an active Airflow run.
         lock_run(cursor, run_id, started_at, claim=True)
         states = {}
         for season in seasons:
             cursor.execute("SELECT * FROM season_sync_state WHERE season=%s", (season,))
-            states[season] = cursor.fetchone()
+            state = cursor.fetchone() or {"last_success_at": None, "last_full_sync_at": None}
+            cursor.execute("SELECT fixture_id FROM live_matches WHERE season=%s ORDER BY fixture_id", (season,))
+            state["known_fixture_ids"] = [row["fixture_id"] for row in cursor.fetchall()]
+            states[season] = state
         # Future NS fixtures are handled by the moving window. Uncertain or overdue
         # fixtures must be polled by ID regardless of their original kickoff date.
         cursor.execute("""
@@ -84,7 +93,7 @@ def extraction_state(seasons, run_id, started_at):
             ORDER BY fixture_id
         """, tuple(seasons))
         pending = cursor.fetchall()
-    return states, pending
+    return states, pending, started_at
 
 
 def lock_run(cursor, run_id, started_at, claim=False):
@@ -95,6 +104,8 @@ def lock_run(cursor, run_id, started_at, claim=False):
     if control.get("last_completed_run_id") == run_id:
         raise RuntimeError("This run ID has already completed. Use a new ID for a fresh extraction.")
     owner = control["pending_run_id"]
+    if owner == run_id and control.get("pending_started_at") != started_at:
+        raise RuntimeError("Pending run observation does not match this staging batch.")
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     expired = control.get("pending_lease_until") is not None and control["pending_lease_until"] < now
     if owner and owner != run_id:
@@ -104,7 +115,7 @@ def lock_run(cursor, run_id, started_at, claim=False):
     if completed and started_at <= completed:
         raise RuntimeError("This staging batch is stale or already completed.")
     if claim:
-        cursor.execute("UPDATE pipeline_control SET pending_run_id=%s,pending_lease_until=%s WHERE control_id=1", (run_id, now + timedelta(hours=6)))
+        cursor.execute("UPDATE pipeline_control SET pending_run_id=%s,pending_lease_until=%s,pending_started_at=%s WHERE control_id=1", (run_id, now + timedelta(hours=6), started_at))
     elif owner != run_id:
         raise RuntimeError("Load teams and venues before loading matches or validating.")
     else:
@@ -181,6 +192,7 @@ def upsert_matches(cursor, rows):
         cursor.execute("""
             SELECT fixture_id FROM live_matches
             WHERE match_date=%s AND home_team=%s AND away_team=%s AND fixture_id<>%s
+            FOR UPDATE
         """, (row[1], row[2], row[3], row[0]))
         if cursor.fetchone():
             raise ValueError("Fixture conflicts with the date/team unique key.")
@@ -272,7 +284,7 @@ def finish_run(manifest, started_at, root):
                     last_success_at=VALUES(last_success_at),
                     last_full_sync_at=COALESCE(VALUES(last_full_sync_at),last_full_sync_at)
             """, (season, started_at, full_at))
-        cursor.execute("UPDATE pipeline_control SET pending_run_id=NULL,pending_lease_until=NULL,last_completed_at=%s,last_completed_run_id=%s WHERE control_id=1", (started_at, manifest["run_id"]))
+        cursor.execute("UPDATE pipeline_control SET pending_run_id=NULL,pending_lease_until=NULL,pending_started_at=NULL,last_completed_at=%s,last_completed_run_id=%s WHERE control_id=1", (started_at, manifest["run_id"]))
     print("PASS | protected 2024 snapshot unchanged | checkpoints committed")
 
 
@@ -282,5 +294,5 @@ def release_run(run_id):
         row = cursor.fetchone()
         if not row or row["pending_run_id"] != run_id:
             raise ValueError("The supplied run ID does not own the pending run.")
-        cursor.execute("UPDATE pipeline_control SET pending_run_id=NULL,pending_lease_until=NULL WHERE control_id=1")
+        cursor.execute("UPDATE pipeline_control SET pending_run_id=NULL,pending_lease_until=NULL,pending_started_at=NULL WHERE control_id=1")
     print("Released pending run. Existing rows retained; checkpoint not advanced.")

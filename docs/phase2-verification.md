@@ -1,5 +1,9 @@
 # Phase 2 — verification report
 
+# Review follow-up
+
+This file records the initial Phase 2 implementation verification. The subsequent engineering review, additional fixes, current results, and deployment blockers are in [engineering-review.md](engineering-review.md).
+
 ## Baseline and scope
 
 - Existing repository ID 1281559795 confirms the rename to `Mohamed254-pixel/premier-league-data-pipeline`.

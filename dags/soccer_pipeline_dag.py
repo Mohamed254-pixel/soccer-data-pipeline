@@ -32,12 +32,22 @@ def run_script(script_name, run_id=None):
             text=True,
             **options,
         ) as process:
-            for line in process.stdout:
-                LOGGER.info("%s | %s", script_name, line.rstrip())
-            returncode = process.wait()
+            try:
+                for line in process.stdout:
+                    LOGGER.info("%s | %s", script_name, line.rstrip())
+                returncode = process.wait()
+            except BaseException:
+                # Cancellation must not leave a child writing after its task died.
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise
             if returncode:
                 raise subprocess.CalledProcessError(returncode, process.args)
-    except (subprocess.CalledProcessError, OSError):
+    except BaseException:
         LOGGER.exception("FAIL | %s | duration=%.2fs", script_name, perf_counter() - started)
         raise
     LOGGER.info("SUCCESS | %s | duration=%.2fs", script_name, perf_counter() - started)
@@ -54,6 +64,7 @@ def run_script(script_name, run_id=None):
         "owner": "mohamed",
         "retries": 2,
         "retry_delay": timedelta(minutes=5),
+        "execution_timeout": timedelta(hours=1),
     },
     tags=["soccer", "etl", "mysql"],
 )

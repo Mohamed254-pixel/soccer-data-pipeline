@@ -286,3 +286,84 @@ def test_complete_five_stage_pipeline_with_mock_api_and_real_mysql(mysql_databas
     cursor.execute("SELECT COUNT(*) AS total FROM live_matches")
     assert cursor.fetchone()["total"] == 381
     store.assert_historical_snapshot(cursor, ROOT)
+
+
+def test_migration_reapply_detects_missing_foreign_key(mysql_database):
+    connection, cursor = mysql_database
+    migration.apply(connection, cursor)
+    cursor.execute("ALTER TABLE live_matches DROP FOREIGN KEY fk_fixture_home_season")
+    connection.commit()
+    with pytest.raises(ValueError, match="schema"):
+        migration.apply(connection, cursor)
+
+
+def test_rollback_finishes_after_interruption_following_metadata_drop(mysql_database):
+    connection, cursor = mysql_database
+    migration.apply(connection, cursor)
+    cursor.execute("UPDATE pipeline_control SET enabled=FALSE WHERE control_id=1")
+    connection.commit()
+    first = next(migration.statements(migration.MIGRATIONS / "003_incremental_etl.down.sql"))
+    cursor.execute(first)
+    connection.commit()
+    migration.rollback(connection, cursor)
+    cursor.execute("SHOW TABLES")
+    assert {next(iter(row.values())) for row in cursor.fetchall()} == {"live_matches", "teams", "venues"}
+    store.assert_historical_snapshot(cursor, ROOT, metadata=False)
+
+
+def test_migration_refuses_wrong_metadata_type(mysql_database):
+    connection, cursor = mysql_database
+    migration.apply(connection, cursor)
+    cursor.execute("ALTER TABLE live_matches MODIFY elapsed INT UNSIGNED NULL")
+    connection.commit()
+    with pytest.raises(ValueError, match="schema column/type"):
+        migration.apply(connection, cursor)
+
+
+def test_migration_refuses_missing_control_primary_key(mysql_database):
+    connection, cursor = mysql_database
+    migration.apply(connection, cursor)
+    cursor.execute("ALTER TABLE pipeline_control DROP PRIMARY KEY")
+    connection.commit()
+    with pytest.raises(ValueError, match="primary-key"):
+        migration.apply(connection, cursor)
+
+
+def test_migrations_are_mutually_exclusive(mysql_database):
+    connection, cursor = mysql_database
+    other = store.get_connection()
+    other_cursor = other.cursor(dictionary=True)
+    try:
+        with migration.migration_lock(cursor):
+            with pytest.raises(ValueError, match="schema lock"):
+                migration.apply(other, other_cursor)
+    finally:
+        other_cursor.close()
+        other.close()
+    assert "season" not in migration.column_names(cursor)
+
+
+def test_extraction_retry_without_manifest_keeps_one_observation_time(mysql_database):
+    connection, cursor = mysql_database
+    migration.apply(connection, cursor)
+    started = datetime(2026, 11, 2, 6)
+    _, _, first = store.extraction_state([2026], "same-extraction", started)
+    _, _, retry = store.extraction_state([2026], "same-extraction", started + timedelta(minutes=5))
+    assert first == retry == started
+
+
+def test_readiness_is_read_only_before_and_after_migration(mysql_database, monkeypatch):
+    import check_readiness
+    connection, cursor = mysql_database
+    monkeypatch.setattr(check_readiness, "get_connection", store.get_connection)
+    before = check_readiness.check_database()
+    assert before["archive_matches"] and not before["migration_003_applied"]
+    migration.apply(connection, cursor)
+    after = check_readiness.check_database()
+    assert after["archive_matches"] and after["pipeline_enabled"]
+    assert before["counts"] == after["counts"]
+    connection.commit()
+    cursor.execute("SELECT pending_run_id FROM pipeline_control WHERE control_id=1")
+    assert cursor.fetchone()["pending_run_id"] is None
+    cursor.execute("SELECT COUNT(*) AS total FROM season_sync_state")
+    assert cursor.fetchone()["total"] == 0

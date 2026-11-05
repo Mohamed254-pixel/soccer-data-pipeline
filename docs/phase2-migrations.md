@@ -32,6 +32,10 @@ The named SQL steps:
 
 Each named up step can be resumed. The match metadata ALTER is one atomic statement; on a retry it is skipped only when the full expected metadata column set is present. Incomplete/unexpected column sets fail for inspection. Reapplying an already enabled migration verifies the protected snapshot and performs no further writes.
 
+Apply and rollback hold a database-scoped advisory lock, preventing two migration commands from racing. Preflight/reapply validate InnoDB engines, column types, supporting primary keys, foreign keys, and the season/status/date index. Drift fails for inspection rather than being silently repaired. The SQL template's `__ARCHIVE_FIXTURE_IDS__` is bound to parameters from the verified CSV by the Python runner; do not substitute arbitrary IDs or execute the template directly.
+
+These safeguards require all ETL and external writers to remain stopped during migration. An advisory migration lock does not stop unrelated clients that ignore it. If an older draft of 003 has already been applied, including one without `pending_started_at`, the revised preflight deliberately rejects it. Review that schema and plan a separate approved repair; do not blindly replay DDL.
+
 MySQL DDL commits implicitly. This is **not** a transaction wrapping the entire migration; `ROLLBACK` cannot undo prior ALTER/CREATE statements. Do not run the SQL file directly and bypass the Python guards. See [MySQL's atomic-DDL explanation](https://dev.mysql.com/doc/refman/8.0/en/atomic-ddl.html).
 
 ## Rollback before ingestion
@@ -45,6 +49,8 @@ PIPELINE_ENV_FILE=/private/path/admin.env python scripts/migrate_phase2.py --rol
 It verifies the exact original snapshot and refuses if there are nonhistorical fixtures, new season memberships, changed canonical counts, sync checkpoints, or a pending run. It disables Phase 2, removes only the added metadata/constraints and the three migration-owned supporting tables, and verifies the original archive again. No original match/team/venue row is deleted. Original SQL schema files are not rewritten.
 
 After ingestion, destructive rollback is deliberately refused. Pause the DAG and retain the additive schema and imported records. Do not drop new columns/tables or delete other seasons to make the guard pass. A separately designed export/restore is needed for a later structural rollback. The old Phase 1 fixed-380 validator is not appropriate for a mixed-season database.
+
+An interrupted rollback can be resumed even when its metadata ALTER committed but supporting tables remain. The same snapshot/state guards must pass before cleanup continues. Test backup restoration separately before an approved application migration; passing disposable integration tests does not prove your application backup can be restored.
 
 ## Activate weekly updates
 
@@ -66,6 +72,8 @@ After a transient failure, retry the original run ID to use the same frozen vali
 ```bash
 PIPELINE_RUN_ID=the_original_run_id python run_pipeline.py
 ```
+
+The claim binds the original observation timestamp in `pipeline_control.pending_started_at`, even if extraction fails before publishing a manifest. Retrying cannot change the meaning of that same observation. A filesystem lock serializes stage operations for one manifest in the shared Mac/Linux staging directory. Use the same staging storage when retrying; independent storage and uncoordinated external database writers are not supported.
 
 If a batch is invalid or a run is abandoned, stop its workers before explicitly releasing it:
 

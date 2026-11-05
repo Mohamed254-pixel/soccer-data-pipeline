@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS pipeline_control (
     control_id TINYINT UNSIGNED NOT NULL PRIMARY KEY,
     enabled BOOLEAN NOT NULL DEFAULT FALSE,
     pending_run_id VARCHAR(250) NULL,
+    pending_started_at DATETIME(6) NULL,
     pending_lease_until DATETIME(6) NULL,
     last_completed_at DATETIME(6) NULL,
     last_completed_run_id VARCHAR(250) NULL
@@ -69,7 +70,7 @@ JOIN teams h ON h.team_name=m.home_team AND h.league='Premier League'
 JOIN teams a ON a.team_name=m.away_team AND a.league='Premier League'
 SET m.season=2024, m.status_short='FT', m.status_long='Match Finished',
     m.home_api_team_id=h.api_team_id, m.away_api_team_id=a.api_team_id
-WHERE m.season IS NULL;
+WHERE m.season IS NULL AND m.fixture_id IN (__ARCHIVE_FIXTURE_IDS__);
 
 -- step: enable
 UPDATE pipeline_control SET enabled=TRUE WHERE control_id=1;
