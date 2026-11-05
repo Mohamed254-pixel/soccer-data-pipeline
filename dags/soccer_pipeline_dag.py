@@ -1,30 +1,50 @@
 from datetime import timedelta
 from pathlib import Path
+import logging
 import subprocess
 import sys
+from time import perf_counter
 
 import pendulum
 from airflow.sdk import dag, task
 
 
 PROJECT_ROOT = Path("/opt/soccer")
+LOGGER = logging.getLogger(__name__)
 
 
 def run_script(script_name):
     script_path = PROJECT_ROOT / "scripts" / script_name
 
-    subprocess.run(
-        [sys.executable, str(script_path)],
-        cwd=PROJECT_ROOT,
-        check=True,
-    )
+    started = perf_counter()
+    LOGGER.info("START | %s", script_name)
+    try:
+        # Stream child output into the Airflow task log; propagate failures for retries.
+        with subprocess.Popen(
+            [sys.executable, "-u", str(script_path)],
+            cwd=PROJECT_ROOT,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        ) as process:
+            for line in process.stdout:
+                LOGGER.info("%s | %s", script_name, line.rstrip())
+            returncode = process.wait()
+            if returncode:
+                raise subprocess.CalledProcessError(returncode, process.args)
+    except (subprocess.CalledProcessError, OSError):
+        LOGGER.exception("FAIL | %s | duration=%.2fs", script_name, perf_counter() - started)
+        raise
+    LOGGER.info("SUCCESS | %s | duration=%.2fs", script_name, perf_counter() - started)
 
 
 @dag(
     dag_id="premier_league_etl",
-    schedule=None,
+    description="Premier League Data Engineering Pipeline: extract, load, and validate",
+    schedule="0 6 * * 1",
     start_date=pendulum.datetime(2026, 9, 1, tz="UTC"),
     catchup=False,
+    max_active_runs=1,
     default_args={
         "owner": "mohamed",
         "retries": 2,
@@ -69,4 +89,4 @@ def premier_league_etl():
     )
 
 
-premier_league_etl()
+dag = premier_league_etl()

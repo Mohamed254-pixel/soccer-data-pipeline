@@ -1,4 +1,5 @@
 from pathlib import Path
+from decimal import Decimal, InvalidOperation
 
 import pandas as pd
 
@@ -68,7 +69,13 @@ def clean_int(value):
     if pd.isna(value):
         return None
 
-    return int(value)
+    try:
+        number = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise ValueError("Expected a nonnegative integer.") from exc
+    if not number.is_finite() or number < 0 or number != number.to_integral_value():
+        raise ValueError("Expected a nonnegative integer.")
+    return int(number)
 
 
 def require_columns(df, required, file_name):
@@ -98,7 +105,7 @@ def prepare_venue_rows(df):
         venue_id = clean_int(record["venue_id"])
         venue_name = clean_text(record["venue_name"])
 
-        if venue_id is None or venue_name is None:
+        if venue_id is None or venue_id <= 0 or venue_name is None:
             raise ValueError("Every venue requires an ID and name.")
 
         rows.append(
@@ -133,6 +140,8 @@ def prepare_team_rows(df):
         "venue_id",
     }
     require_columns(df, required, "teams.csv")
+    if df.empty:
+        raise ValueError("teams.csv is empty.")
 
     rows = []
 
@@ -142,7 +151,7 @@ def prepare_team_rows(df):
         league = clean_text(record["league"])
         is_national = clean_int(record["is_national"])
 
-        if api_team_id is None or team_name is None or league is None:
+        if api_team_id is None or api_team_id <= 0 or team_name is None or league is None:
             raise ValueError(
                 "Every team requires an API ID, name, and league."
             )
@@ -187,9 +196,10 @@ def main():
         )
 
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = None
 
     try:
+        cursor = conn.cursor()
         cursor.executemany(VENUE_UPSERT_SQL, venues)
         cursor.executemany(TEAM_UPSERT_SQL, teams)
         conn.commit()
@@ -199,8 +209,11 @@ def main():
         raise
 
     finally:
-        cursor.close()
-        conn.close()
+        try:
+            if cursor is not None:
+                cursor.close()
+        finally:
+            conn.close()
 
     print(f"Loaded or updated {len(venues)} venues.")
     print(f"Loaded or updated {len(teams)} Premier League teams.")

@@ -1,6 +1,6 @@
-# Data Model
+# Premier League Data Engineering Pipeline — Data Model
 
-*Last reviewed: 2026-10-08*
+*Last reviewed: 2026-11-04 (Phase 1; schema unchanged)*
 
 ## Overview
 
@@ -228,7 +228,7 @@ The database schema allows match scores to be null because unfinished fixtures m
 
 Each check prints `PASS` or `FAIL`.
 
-A failed check raises an error and causes the Airflow `validate_data_quality` task and DAG run to fail.
+A failed check raises an error and causes the Airflow `validate_data_quality` task and DAG run to fail. The local runner now runs the same checks as its fifth step and exits with a nonzero code on failure. Validation does not undo transactions already committed by the loaders.
 
 ## Data Integrity Controls
 

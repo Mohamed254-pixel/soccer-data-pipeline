@@ -1,6 +1,6 @@
-# Pipeline Architecture
+# Premier League Data Engineering Pipeline — Architecture
 
-*Last reviewed: 2026-10-07*
+*Last reviewed: 2026-11-04 (Phase 1)*
 
 ## Scope
 
@@ -48,7 +48,7 @@ Running the following command executes the pipeline directly:
 python3 run_pipeline.py
 ```
 
-`run_pipeline.py` calls the extraction and loading scripts in sequence.
+`run_pipeline.py` calls all five extraction, loading, and quality-validation scripts in sequence. It logs start, success or failure, and duration for each step. A failed subprocess stops execution with a nonzero exit code; downstream steps do not run.
 
 ### Airflow execution
 
@@ -66,7 +66,7 @@ load_matches
 validate_data_quality
 ```
 
-Airflow provides task status, retries, execution history, and logs. The DAG currently uses `schedule=None`, so runs are started manually through the Airflow interface or command line.
+Airflow provides task status, retries, execution history, and logs. The DAG uses `schedule="0 6 * * 1"`, running every Monday at 06:00 UTC, and also supports manual triggers. `max_active_runs=1` prevents overlapping DAG runs. Unpause the DAG to enable scheduling; Compose creates new DAGs paused by default.
 
 ## Pipeline Steps
 
@@ -158,11 +158,14 @@ The DAG uses these default settings:
 - Retries: 2
 - Retry delay: 5 minutes
 - Catchup: disabled
-- Schedule: manual
+- Schedule: every Monday at 06:00 UTC
+- Maximum active DAG runs: 1
 
 Task dependencies ensure that later tasks do not start until earlier tasks finish successfully.
 
 A failed task prevents its downstream tasks from running. Airflow records the failure and provides logs for troubleshooting.
+
+The subprocess helper streams child stdout and stderr into the task logger, records elapsed time, and raises child-process failures. The Airflow 3 public `airflow.sdk` decorators are retained. See the [Airflow Task SDK public interface](https://airflow.apache.org/docs/task-sdk/1.3.1/api.html) for the DAG options.
 
 ## Docker Environment
 
@@ -288,6 +291,8 @@ If a database error occurs:
 
 This prevents partially loaded batches.
 
+Transactions are per loader, not across the whole pipeline. Post-load validation is read-only; it cannot roll back an earlier committed load. A failed quality check fails the run so the source issue can be corrected and the repeatable pipeline rerun.
+
 The team and venue loader handles both tables in one transaction. If either table fails, neither batch is committed.
 
 The match loader uses a separate transaction because it runs as a separate pipeline step.
@@ -315,20 +320,28 @@ This prevents the pipeline from accidentally creating, dropping, or altering tab
 
 - Fixture records store team names instead of team foreign keys.
 - The pipeline performs a full extraction on every run.
-- The Airflow DAG must be triggered manually because `schedule=None`.
 - The row-count checks are fixed to the 2024 Premier League season.
 - Pipeline runs are not stored in a separate business-monitoring table.
 - Raw API JSON is not stored separately from transformed CSV data.
 - The MySQL database runs outside the Airflow Docker Compose environment.
+- The local runner and Airflow must not concurrently write the same staged CSV files.
+- The existing Compose stack uses local-development credentials for its Airflow metadata services; it is not a production deployment.
+
+## Automated Verification
+
+`python3 -m pytest` runs without API credentials or MySQL. API calls and database connections are mocked; unmocked calls are blocked, and `.env` loading is disabled during tests. The suite exercises parsing, malformed responses, HTTP/JSON failures, required columns, dates, integer scores, duplicates, venue relationships, UPSERT parameters, commits and rollback, final quality checks, and runner failure propagation.
+
+The lightweight suite also checks DAG configuration and child-process logging. Full DAG import validation should be run in Airflow 3.3.1 using `airflow dags list-import-errors`. GitHub Actions runs the offline suite on Python 3.11 for pushes and pull requests to `main`; it performs no deployment.
 
 ## Planned Improvements
 
 - Add home and away team foreign keys to fixtures
 - Add incremental fixture extraction
-- Add automated unit and integration tests
+- Add live integration tests against isolated disposable services
 - Add pipeline run logging and freshness checks
 - Add API rate-limit handling
-- Add an Airflow schedule
 - Store raw API responses in Amazon S3
 - Deploy MySQL to Amazon RDS
+- Add dbt transformations
 - Add standings, player statistics, and match events
+- Add monitoring and dashboards

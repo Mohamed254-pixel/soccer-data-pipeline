@@ -72,14 +72,24 @@ def prepare_rows(df):
         cleaned["away_team"].astype("string").str.strip()
     )
 
-    cleaned = cleaned.dropna(
-        subset=["fixture_id", "date", "home_team", "away_team"]
-    )
-
-    cleaned = cleaned[
-        cleaned["home_team"].ne("")
-        & cleaned["away_team"].ne("")
-    ]
+    if cleaned.empty:
+        raise ValueError("Match data is empty.")
+    if cleaned[["fixture_id", "date", "home_team", "away_team"]].isna().any().any():
+        raise ValueError("Matches require a valid fixture ID, date, and team names.")
+    if cleaned["home_team"].eq("").any() or cleaned["away_team"].eq("").any():
+        raise ValueError("Match team names cannot be blank.")
+    ids = cleaned["fixture_id"]
+    if ((ids <= 0) | (ids % 1 != 0)).any():
+        raise ValueError("Fixture IDs must be positive integers.")
+    if ids.duplicated().any():
+        raise ValueError("Match data contains duplicate fixture IDs.")
+    for column in ("home_goals", "away_goals"):
+        scores = cleaned[column]
+        if (df[column].notna() & scores.isna()).any():
+            raise ValueError(f"{column} contains invalid numeric scores.")
+        present = scores.dropna()
+        if ((present < 0) | (present > 65535) | (present % 1 != 0)).any():
+            raise ValueError(f"{column} must contain nonnegative integer scores within SMALLINT range.")
 
     rows = []
 
@@ -107,18 +117,10 @@ def main():
         )
 
     conn = get_connection()
-    cursor = conn.cursor()
+    cursor = None
 
     try:
-        cursor.execute("SELECT DATABASE(), @@hostname, @@port")
-        print("Python connection:", cursor.fetchone())
-
-        cursor.execute("SHOW COLUMNS FROM live_matches")
-        print("Columns Python sees:")
-
-        for column in cursor.fetchall():
-            print(column)
-
+        cursor = conn.cursor()
         cursor.executemany(UPSERT_SQL, rows)
         conn.commit()
 
@@ -127,8 +129,11 @@ def main():
         raise
 
     finally:
-        cursor.close()
-        conn.close()
+        try:
+            if cursor is not None:
+                cursor.close()
+        finally:
+            conn.close()
 
     print(f"Loaded or updated {len(rows)} live matches.")
 
