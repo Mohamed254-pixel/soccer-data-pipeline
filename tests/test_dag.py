@@ -59,3 +59,16 @@ def test_task_process_logs_and_failure(tmp_path, caplog, exit_code):
     assert "task output" in caplog.text
     assert "task stderr" in caplog.text
     assert "duration=" in caplog.text
+
+
+def test_task_process_receives_shared_dag_run_id(tmp_path, caplog):
+    tree = ast.parse(DAG_PATH.read_text())
+    helper = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "run_script")
+    namespace = {"PROJECT_ROOT": tmp_path, "sys": sys, "subprocess": subprocess,
+                 "perf_counter": perf_counter, "LOGGER": logging.getLogger("dag-run-id-test")}
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), str(DAG_PATH), "exec"), namespace)
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "child.py").write_text("import os\nprint(os.environ['PIPELINE_RUN_ID'])\n")
+    with caplog.at_level(logging.INFO):
+        namespace["run_script"]("child.py", "scheduled-test-run")
+    assert "scheduled-test-run" in caplog.text

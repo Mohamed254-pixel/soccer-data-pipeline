@@ -1,303 +1,112 @@
 # Premier League Data Engineering Pipeline — Data Model
 
-*Last reviewed: 2026-11-04 (Phase 1; schema unchanged)*
+## Seasons and identities
 
-## Overview
-
-The Premier League pipeline currently stores data in three MySQL tables:
-
-- `live_matches`
-- `teams`
-- `venues`
-
-The team and venue tables have a foreign-key relationship. The match table currently stores team names and has not yet been connected to the teams table through foreign keys.
-
-## Entity Relationship Diagram
+The existing tables are preserved. Migration 003 adds match metadata and three supporting tables. `2024` means 2024–25; `2026` means 2026–27. Never infer season by taking the calendar year of a kickoff date.
 
 ```mermaid
 erDiagram
-    VENUES ||--o{ TEAMS : "hosts"
-
-    VENUES {
-        INT venue_id PK
-        VARCHAR venue_name
-        VARCHAR address
-        VARCHAR city
-        INT capacity
-        VARCHAR surface
-        VARCHAR image_url
-    }
-
-    TEAMS {
-        INT team_id PK
-        INT api_team_id UK
-        VARCHAR team_name
-        VARCHAR team_code
-        VARCHAR country
-        VARCHAR league
-        VARCHAR stadium
-        SMALLINT founded
-        TINYINT is_national
-        VARCHAR logo_url
-        INT venue_id FK
-    }
-
+    VENUES ||--o{ TEAMS : canonical_venue
+    TEAMS ||--o{ SEASON_TEAMS : membership
+    VENUES ||--o{ SEASON_TEAMS : season_venue
+    SEASON_TEAMS ||--o{ LIVE_MATCHES : home_membership
+    SEASON_TEAMS ||--o{ LIVE_MATCHES : away_membership
     LIVE_MATCHES {
         BIGINT fixture_id PK
         DATETIME match_date
-        VARCHAR home_team
-        VARCHAR away_team
+        SMALLINT season
+        VARCHAR status_short
+        INT home_api_team_id FK
+        INT away_api_team_id FK
         SMALLINT home_goals
         SMALLINT away_goals
+        DATETIME source_observed_at
+    }
+    SEASON_TEAMS {
+        SMALLINT season PK
+        INT api_team_id PK,FK
+        VARCHAR team_name
+        INT venue_id FK
+        JSON team_data
+        JSON venue_data
+    }
+    SEASON_SYNC_STATE {
+        SMALLINT season PK
+        DATETIME last_success_at
+        DATETIME last_full_sync_at
+    }
+    PIPELINE_CONTROL {
+        TINYINT control_id PK
+        BOOLEAN enabled
+        VARCHAR pending_run_id
+        DATETIME pending_lease_until
+        DATETIME last_completed_at
+        VARCHAR last_completed_run_id
     }
 ```
 
-`live_matches` appears separately because it does not yet contain team foreign keys.
-
 ## `live_matches`
 
-Stores Premier League fixture dates, team names, and scores.
+Existing columns retain their meanings:
 
-| Column       | Type                | Null | Description                                                   |
-| ------------ | ------------------- | ---- | ------------------------------------------------------------- |
-| `fixture_id` | `BIGINT UNSIGNED`   | No   | API-FOOTBALL fixture ID and primary key                       |
-| `match_date` | `DATETIME`          | No   | Fixture date and time stored as UTC without a timezone offset |
-| `home_team`  | `VARCHAR(100)`      | No   | Home team name                                                |
-| `away_team`  | `VARCHAR(100)`      | No   | Away team name                                                |
-| `home_goals` | `SMALLINT UNSIGNED` | Yes  | Home score; may be null before a match finishes               |
-| `away_goals` | `SMALLINT UNSIGNED` | Yes  | Away score; may be null before a match finishes               |
+| Column | Type after migration | Meaning |
+| --- | --- | --- |
+| `fixture_id` | BIGINT UNSIGNED, primary key | Stable source identity across corrections and postponements |
+| `match_date` | DATETIME(6), nullable | UTC kickoff, without timezone offset; nullable for TBD/PST |
+| `home_team`, `away_team` | VARCHAR(100), required | Source team-name snapshots |
+| `home_goals`, `away_goals` | SMALLINT UNSIGNED, nullable | Null before scores are known; never fabricate zero |
 
-### Keys and indexes
+Added metadata:
 
-- Primary key: `fixture_id`
-- Unique key: `uq_live_fixture (match_date, home_team, away_team)`
-- Index: `idx_live_match_date`
-- Index: `idx_live_home_team`
-- Index: `idx_live_away_team`
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `season` | SMALLINT UNSIGNED, nullable for migration compatibility | Starting year; required by new application writes |
+| `status_short` | VARCHAR(5) | API status code |
+| `status_long` | VARCHAR(100) | Human-readable source status |
+| `elapsed` | SMALLINT UNSIGNED, nullable | Source elapsed match time |
+| `home_api_team_id`, `away_api_team_id` | INT UNSIGNED, nullable for migration compatibility | Source team IDs; required by new writes |
+| `source_observed_at` | DATETIME(6), nullable for backfilled archive | UTC batch observation time, not an API updated-at timestamp |
 
-The API fixture ID provides the main duplicate protection.
+The existing primary key, date/home/away unique key, and indexes are retained. A season/status/date index supports unresolved-fixture selection. Two foreign keys reference `(season, api_team_id)` in `season_teams`. The loader guards alternate-key collisions before UPSERT and never changes an existing fixture's season identity. A full load is not a replacement/delete operation.
 
-The date, home team, and away team unique key provides a second safeguard against duplicate fixtures.
+Scheduled/live/postponed/abandoned/cancelled/technical outcomes retain appropriate nulls. Finished FT/AET/PEN require populated nonnegative integral scores. Unknown statuses or malformed dates fail before loading. The original 380 completed historical matches receive only metadata backfills; their original six data fields remain unchanged.
 
-### UPSERT behavior
+## `teams` and `venues`
 
-When `fixture_id` already exists, the loader updates:
+The original schema in `sql/schema.sql` is unchanged. `teams.team_id` is an internal surrogate key; `api_team_id` is the unique source identifier. `teams.venue_id` still references `venues.venue_id`. These original rows preserve the historical canonical descriptions.
 
-- Match date
-- Home team
-- Away team
-- Home goals
-- Away goals
+Phase 2 inserts previously unseen source IDs without overwriting existing descriptions. Global table counts can exceed 20 as seasons introduce new clubs and venues. Current-season descriptions must be read from `season_teams`, rather than assuming canonical rows describe every later season.
 
-This allows unfinished fixtures to be updated when scores become available.
+## `season_teams`
 
-## `venues`
+The composite primary key is `(season, api_team_id)`. Its foreign keys reference the canonical source team ID and optional venue. `team_name` and `venue_id` make current membership easy to query. `team_data` and `venue_data` preserve the normalized metadata returned for that season, including current stadium details. Missing venues are represented as null; referentially missing non-null venue IDs fail loading.
 
-Stores stadium information returned with API-FOOTBALL team data.
+Migration 003 seeds the 20 historical memberships and their descriptions. Each configured active season must have 20 memberships; there is no global 20-team constraint. Membership updates do not delete old seasons.
 
-| Column       | Type           | Null | Description                           |
-| ------------ | -------------- | ---- | ------------------------------------- |
-| `venue_id`   | `INT UNSIGNED` | No   | API-FOOTBALL venue ID and primary key |
-| `venue_name` | `VARCHAR(150)` | No   | Stadium name                          |
-| `address`    | `VARCHAR(255)` | Yes  | Street address                        |
-| `city`       | `VARCHAR(100)` | Yes  | Stadium city                          |
-| `capacity`   | `INT UNSIGNED` | Yes  | Maximum listed capacity               |
-| `surface`    | `VARCHAR(50)`  | Yes  | Playing surface                       |
-| `image_url`  | `VARCHAR(500)` | Yes  | API image URL                         |
-
-### Keys and indexes
-
-- Primary key: `venue_id`
-- Index: `idx_venues_city`
-
-### UPSERT behavior
-
-When `venue_id` already exists, all descriptive venue fields are refreshed from the latest CSV data.
-
-## `teams`
-
-Stores Premier League club identity, metadata, and venue relationships.
-
-| Column        | Type                          | Null | Description                                |
-| ------------- | ----------------------------- | ---- | ------------------------------------------ |
-| `team_id`     | `INT UNSIGNED AUTO_INCREMENT` | No   | Internal MySQL surrogate primary key       |
-| `api_team_id` | `INT UNSIGNED`                | Yes  | Stable API-FOOTBALL team ID                |
-| `team_name`   | `VARCHAR(100)`                | No   | Team name                                  |
-| `team_code`   | `VARCHAR(20)`                 | Yes  | Short API team code                        |
-| `country`     | `VARCHAR(100)`                | Yes  | Team country                               |
-| `league`      | `VARCHAR(100)`                | Yes  | Competition name                           |
-| `stadium`     | `VARCHAR(150)`                | Yes  | Stadium name stored for convenient display |
-| `founded`     | `SMALLINT UNSIGNED`           | Yes  | Founding year                              |
-| `is_national` | `TINYINT(1)`                  | No   | `1` for a national team and `0` for a club |
-| `logo_url`    | `VARCHAR(500)`                | Yes  | API team logo URL                          |
-| `venue_id`    | `INT UNSIGNED`                | Yes  | Foreign key referencing `venues.venue_id`  |
-
-### Keys and indexes
-
-- Primary key: `team_id`
-- Unique key: `uq_teams_api_team_id (api_team_id)`
-- Unique key: `uq_team_name_league (team_name, league)`
-- Index: `idx_teams_venue_id`
-- Foreign key: `fk_teams_venue`
-
-### Foreign-key behavior
-
-```text
-teams.venue_id → venues.venue_id
-```
-
-The foreign key uses:
+Example season-aware query:
 
 ```sql
-ON UPDATE CASCADE
-ON DELETE SET NULL
+SELECT m.season, h.team_name AS home_team, a.team_name AS away_team,
+       m.match_date, m.status_short, m.home_goals, m.away_goals
+FROM live_matches AS m
+JOIN season_teams AS h
+  ON h.season=m.season AND h.api_team_id=m.home_api_team_id
+JOIN season_teams AS a
+  ON a.season=m.season AND a.api_team_id=m.away_api_team_id
+WHERE m.season=2026
+ORDER BY m.match_date;
 ```
 
-If a venue ID changes, the related team reference updates automatically.
+## `season_sync_state`
 
-If a venue is deleted, the team remains in the database and its `venue_id` becomes null.
+One row per successfully refreshed season stores `last_success_at` and `last_full_sync_at`. Extraction reads these checkpoints to select a window versus a full reconciliation. They advance only in the successful final quality transaction. An empty incremental window can advance success time while retaining the previous full-sync timestamp. The archived season need not have a sync-state row because it is never automatically refreshed.
 
-### UPSERT behavior
+## `pipeline_control`
 
-When either the API team ID or team-and-league combination already exists, the loader updates the team details instead of inserting a duplicate row.
+The singleton row `control_id=1` enables/disables Phase 2, records the pending run owner, and remembers the last completed run ID/time. Short transactions lock this row to enforce one pipeline owner across local and Airflow runs. A failed run retains ownership until resumed, explicitly released, or its six-hour lease expires and a new extraction takes ownership. Superseded workers cannot write. The final validation/checkpoint operation is safe to retry after commit.
 
-## Internal and External IDs
+## Historical integrity and migrations
 
-The teams table uses two identifiers:
+Validation compares every original fixture/date/name/score tuple and every original canonical team/venue row against the committed CSVs, not merely a count of 380. New season records do not replace or delete historical rows. The trusted CSV files are mounted read-only in Docker and never used as incremental staging targets.
 
-- `team_id` is an internal MySQL-generated surrogate key.
-- `api_team_id` is the external identifier assigned by API-FOOTBALL.
-
-Keeping both allows the database to maintain its own stable internal relationships while preserving the source-system identifier for API updates.
-
-The venue and match tables currently use their API identifiers directly as primary keys.
-
-## Load Order
-
-The pipeline writes records in this order:
-
-```text
-venues
-   ↓
-teams
-   ↓
-live_matches
-   ↓
-post-load quality checks
-```
-
-Venues must exist before teams because the team table contains the foreign key.
-
-The team and venue loader validates the relationship before opening the database connection.
-
-After all tables are loaded, the data-quality script validates the records stored in MySQL.
-
-## CSV-to-Table Mapping
-
-| CSV file                | MySQL table    | Expected rows |
-| ----------------------- | -------------- | ------------: |
-| `data/live_matches.csv` | `live_matches` |           380 |
-| `data/teams.csv`        | `teams`        |            20 |
-| `data/venues.csv`       | `venues`       |            20 |
-
-## Current Record Counts
-
-| Table          | Rows | Unique source IDs |
-| -------------- | ---: | ----------------: |
-| `live_matches` |  380 |   380 fixture IDs |
-| `teams`        |   20 |   20 API team IDs |
-| `venues`       |   20 |      20 venue IDs |
-
-All 20 non-null team venue references currently match a row in the venues table.
-
-## Post-Load Data Quality Checks
-
-After all three tables are loaded, `scripts/validate_data_quality.py` queries MySQL and verifies:
-
-- 380 match records exist
-- 20 team records exist
-- 20 venue records exist
-- Fixture IDs contain no duplicates
-- Fixture IDs are not missing
-- Team API IDs are not missing
-- Match scores are not missing
-- Match scores are not negative
-- Every team venue reference matches an existing venue
-
-The database schema allows match scores to be null because unfinished fixtures may not have final scores. However, the current 2024 dataset contains completed fixtures, so the post-load validation expects every score to be present.
-
-Each check prints `PASS` or `FAIL`.
-
-A failed check raises an error and causes the Airflow `validate_data_quality` task and DAG run to fail. The local runner now runs the same checks as its fifth step and exits with a nonzero code on failure. Validation does not undo transactions already committed by the loaders.
-
-## Data Integrity Controls
-
-The project protects data at both the database and application levels.
-
-### Database controls
-
-MySQL enforces:
-
-- Primary keys for unique record identification
-- Unique constraints for duplicate prevention
-- A foreign key between teams and venues
-- Unsigned numeric types for IDs, capacities, and scores
-- Indexes for common lookup columns
-
-### Application controls
-
-The Python scripts enforce:
-
-- Required CSV columns
-- Expected record counts
-- Valid IDs
-- Duplicate checks
-- Missing-value checks
-- Nonnegative score checks
-- Valid team-to-venue relationships
-
-These controls work together. Python catches invalid data during the pipeline, while MySQL protects the stored tables.
-
-## Current Normalization Gap
-
-The match table stores `home_team` and `away_team` as text.
-
-This creates several limitations:
-
-- Team names are repeated across fixture rows.
-- A team-name change must be updated in multiple records.
-- The database cannot enforce that every fixture team exists in `teams`.
-- Joins depend on exact team-name matching.
-
-The planned normalized design will add:
-
-```text
-home_team_id
-away_team_id
-```
-
-Both columns will reference `teams.team_id`.
-
-The existing team-name columns can then be removed or retained only as source snapshots.
-
-## Migration History
-
-### Migration 001
-
-`001_align_live_matches_schema.sql`:
-
-- Replaced the generated match ID with the API fixture ID
-- Changed the fixture ID to `BIGINT UNSIGNED`
-- Changed goal columns to `SMALLINT UNSIGNED`
-- Added the fixture uniqueness constraint
-- Added match-date and team-name indexes
-
-### Migration 002
-
-`002_add_team_and_venue_schema.sql`:
-
-- Added the venues table
-- Added API identity and metadata columns to teams
-- Added unique team constraints
-- Added the team-to-venue foreign key
-- Added supporting indexes
+Migration 003 is explicit and guarded. It preflights the exact archive before DDL, supports resuming an interrupted up migration, and permits schema rollback only before incremental ingestion. After new seasons are loaded, rollback refuses to discard their metadata or rows; stop the scheduler and retain the additive schema instead. See [migration and recovery instructions](phase2-migrations.md).

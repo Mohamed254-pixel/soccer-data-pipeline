@@ -13,10 +13,14 @@ PROJECT_ROOT = Path("/opt/soccer")
 LOGGER = logging.getLogger(__name__)
 
 
-def run_script(script_name):
+def run_script(script_name, run_id=None):
     script_path = PROJECT_ROOT / "scripts" / script_name
 
     started = perf_counter()
+    options = {}
+    if run_id is not None:
+        from os import environ
+        options["env"] = {**environ, "PIPELINE_RUN_ID": run_id}
     LOGGER.info("START | %s", script_name)
     try:
         # Stream child output into the Airflow task log; propagate failures for retries.
@@ -26,6 +30,7 @@ def run_script(script_name):
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
+            **options,
         ) as process:
             for line in process.stdout:
                 LOGGER.info("%s | %s", script_name, line.rstrip())
@@ -56,23 +61,28 @@ def premier_league_etl():
 
     @task
     def extract_matches():
-        run_script("api_matches.py")
+        from airflow.sdk import get_current_context
+        run_script("api_matches.py", get_current_context()["run_id"])
 
     @task
     def extract_teams_and_venues():
-        run_script("api_teams.py")
+        from airflow.sdk import get_current_context
+        run_script("api_teams.py", get_current_context()["run_id"])
 
     @task
     def load_teams_and_venues():
-        run_script("load_teams.py")
+        from airflow.sdk import get_current_context
+        run_script("load_teams.py", get_current_context()["run_id"])
 
     @task
     def load_matches():
-        run_script("load_live_matches.py")
+        from airflow.sdk import get_current_context
+        run_script("load_live_matches.py", get_current_context()["run_id"])
 
     @task
     def validate_data_quality():
-        run_script("validate_data_quality.py")
+        from airflow.sdk import get_current_context
+        run_script("validate_data_quality.py", get_current_context()["run_id"])
 
     matches_ready = extract_matches()
     teams_ready = extract_teams_and_venues()

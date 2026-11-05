@@ -223,3 +223,6 @@ __marimo__/
 # Airflow generated files
 logs/
 config/airflow.cfg
+
+# Run-scoped incremental staging (the committed 2024 snapshots stay tracked)
+data/staging/

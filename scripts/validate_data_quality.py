@@ -157,4 +157,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from incremental import main as run_incremental_stage
+    run_incremental_stage("validate_data_quality")

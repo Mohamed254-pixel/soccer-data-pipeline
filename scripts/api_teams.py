@@ -7,7 +7,6 @@ from dotenv import load_dotenv
 from load_teams import prepare_team_rows, prepare_venue_rows
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-load_dotenv(PROJECT_ROOT / ".env")
 
 TEAMS_OUTPUT_PATH = PROJECT_ROOT / "data" / "teams.csv"
 VENUES_OUTPUT_PATH = PROJECT_ROOT / "data" / "venues.csv"
@@ -15,6 +14,7 @@ API_URL = "https://v3.football.api-sports.io/teams"
 
 
 def fetch_teams_and_venues():
+    load_dotenv(PROJECT_ROOT / ".env")
     api_key = os.getenv("API_KEY")
     if not api_key:
         raise RuntimeError("API_KEY is missing from the .env file.")
@@ -126,4 +126,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from incremental import main as run_incremental_stage
+    run_incremental_stage("extract_teams_and_venues")

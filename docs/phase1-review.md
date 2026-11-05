@@ -1,5 +1,7 @@
 # Premier League Data Engineering Pipeline — Phase 1 Review
 
+This is the historical Phase 1 report. PR #5 has since been merged, and repository ID 1281559795 now confirms the name `premier-league-data-pipeline`. Original implementation-session results below retain their historical timing. Phase 2 is reviewed separately.
+
 ## Scope and inspection
 
 Reviewed all tracked Python scripts, the DAG, Dockerfile and Compose configuration, dependency files, environment template, README, architecture/data-model documentation, schema/migrations, analytics queries, license, ignore rules, and the three CSV datasets before implementation. The existing CSV snapshot has 380 matches, 20 teams, and 20 venues. No schema migrations or dataset modifications are part of this phase.
@@ -131,45 +133,11 @@ tests/test_quality.py
 tests/test_runner.py
 ```
 
-## Repository rename
+## Repository rename and Phase 1 merge
 
-**Status: not completed.** GitHub metadata still identifies the repository as `Mohamed254-pixel/soccer-data-pipeline`. The available GitHub connector does not expose a repository rename operation, and GitHub CLI is not installed here. Updating the project title and docs does not rename the remote repository.
+PR #5 was merged with explicit owner approval at `f8f2ca567bb05a0fae06884832039ab545062de4`. GitHub repository ID 1281559795 confirms the existing repository is now `Mohamed254-pixel/premier-league-data-pipeline`. History is preserved, and local `origin` uses the confirmed new URL. The Phase 2 branch starts from that merged main baseline.
 
-Rename the existing repository in GitHub:
-
-1. Open [repository Settings](https://github.com/Mohamed254-pixel/soccer-data-pipeline/settings).
-2. Under General → Repository name, enter `premier-league-data-pipeline` and select Rename.
-3. Confirm GitHub shows `Mohamed254-pixel/premier-league-data-pipeline`.
-4. Update About → Description to: `Premier League Data Engineering Pipeline: API-FOOTBALL ETL with Python, Pandas, MySQL, Airflow, Docker, automated quality checks, pytest, and CI.`
-5. Update the existing local remote after confirmation:
-
-```bash
-git remote set-url origin https://github.com/Mohamed254-pixel/premier-league-data-pipeline.git
-git remote -v
-```
-
-Then update the README clone URL and this status to reflect the verified rename. Rename the existing repository rather than creating another one; this preserves its history. There is no need to rename the local checkout directory or the database/volume identifiers.
-
-## Branch review and merge
-
-Changes are prepared on `feature/phase1-reliability`; `main` is not merged or modified by this phase. Review the working tree and tests before committing:
-
-```bash
-git status --short
-git diff --check
-git diff
-python3 -m pytest
-```
-
-After reviewing, stage the Phase 1 files, commit, and publish the branch:
-
-```bash
-git add README.md docs .env.example run_pipeline.py dags scripts tests pytest.ini requirements-dev.txt .github/workflows/tests.yml
-git commit -m "Add Phase 1 pipeline reliability and automated tests"
-git push -u origin feature/phase1-reliability
-```
-
-Open a pull request targeting `main`, inspect its file diff and Python 3.11 CI result, and merge only after your approval. No AWS resources, deployments, incremental ingestion, dbt, or Kafka are introduced.
+Phase 1's hosted GitHub Actions run 41949893330 passed all 106 tests on Python 3.11.18. The Phase 2 PR is separate and must not be merged without owner approval.
 
 ## Planned improvements
 

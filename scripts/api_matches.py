@@ -6,14 +6,13 @@ import requests
 from dotenv import load_dotenv
 from load_live_matches import prepare_rows
 
-load_dotenv()
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = PROJECT_ROOT / "data" / "live_matches.csv"
 API_URL = "https://v3.football.api-sports.io/fixtures"
 
 
 def fetch_matches():
+    load_dotenv(PROJECT_ROOT / ".env")
     api_key = os.getenv("API_KEY")
     if not api_key:
         raise RuntimeError(
@@ -95,4 +94,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from incremental import main as run_incremental_stage
+    run_incremental_stage("extract_matches")
