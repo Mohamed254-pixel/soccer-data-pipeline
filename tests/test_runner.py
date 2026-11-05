@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 import subprocess
 from unittest.mock import Mock
@@ -9,6 +10,26 @@ import run_pipeline
 
 
 SCRIPTS = ["api_matches.py", "api_teams.py", "load_teams.py", "load_live_matches.py", "validate_data_quality.py"]
+
+
+def test_separate_local_runs_generate_distinct_ids_and_cleanup_on_failure(monkeypatch):
+    ids = []
+    def step(*args):
+        ids.append(os.environ["PIPELINE_RUN_ID"])
+        raise SystemExit(7)
+    monkeypatch.setattr(run_pipeline, "run_step", step)
+    for _ in range(2):
+        with pytest.raises(SystemExit):
+            run_pipeline.main()
+        assert "PIPELINE_RUN_ID" not in os.environ
+    assert ids[0] != ids[1]
+
+
+def test_explicit_resume_id_is_preserved(monkeypatch):
+    monkeypatch.setenv("PIPELINE_RUN_ID", "resume-original")
+    monkeypatch.setattr(run_pipeline, "run_step", Mock())
+    run_pipeline.main()
+    assert os.environ["PIPELINE_RUN_ID"] == "resume-original"
 
 
 def test_pipeline_order_and_logging(monkeypatch, caplog):

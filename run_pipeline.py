@@ -1,8 +1,10 @@
 from pathlib import Path
 import logging
+import os
 import subprocess
 import sys
 from time import perf_counter
+from uuid import uuid4
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -25,6 +27,18 @@ def run_step(label, script_path):
 
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+    generated = "PIPELINE_RUN_ID" not in os.environ
+    if generated:
+        os.environ["PIPELINE_RUN_ID"] = "local-" + str(uuid4())
+    try:
+        run_pipeline()
+    finally:
+        if generated:
+            os.environ.pop("PIPELINE_RUN_ID", None)
+
+
+def run_pipeline():
+    LOGGER.info("Run ID: %s", os.environ["PIPELINE_RUN_ID"])
     run_step(
         "Step 1: Pulling match data from API-FOOTBALL...",
         PROJECT_ROOT / "scripts" / "api_matches.py",

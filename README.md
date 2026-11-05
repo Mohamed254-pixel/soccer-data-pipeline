@@ -1,550 +1,223 @@
 # Premier League Data Engineering Pipeline
 
-![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-blue)
-![MySQL 8.0+](https://img.shields.io/badge/MySQL-8.0%2B-orange)
-![Apache Airflow 3.3.1](https://img.shields.io/badge/Apache%20Airflow-3.3.1-017CEE)
-![Docker Compose](https://img.shields.io/badge/Docker-Compose-2496ED)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+A scheduled, incremental Premier League ETL project built with Python, Pandas, API-FOOTBALL, MySQL, Apache Airflow 3.3.1, Docker Compose, pytest, and GitHub Actions.
 
-An end-to-end data engineering pipeline for the 2024 Premier League season.
+The project preserves its **2024–25 archive** and supports weekly updates for **2026–27** (`season=2026` in the API). Fixtures are inserted or updated by `fixture_id`; reruns do not append duplicates or delete archived records.
 
-The project extracts match, team, and venue data from API-FOOTBALL, transforms and validates it with Python and Pandas, stages it in CSV files, and loads it into MySQL using repeatable UPSERT operations.
+[Repository](https://github.com/Mohamed254-pixel/premier-league-data-pipeline) · [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Migration and recovery](docs/phase2-migrations.md)
 
-Apache Airflow orchestrates the five-step ETL workflow every Monday at 06:00 UTC, while Docker Compose provides a consistent local environment for Airflow and its supporting services. Pytest and GitHub Actions check reliability without API keys or a MySQL server.
+See the [engineering review and activation runbook](docs/engineering-review.md) for verified results and unresolved deployment blockers. Phase 2 is not activated on the application database.
 
-The project is branded **Premier League Data Engineering Pipeline**. The requested GitHub name is `premier-league-data-pipeline`; the remote rename has **not** been performed. See [repository rename and branch review](docs/phase1-review.md#repository-rename) for the manual steps. Existing history and datasets are preserved.
+The [activation investigation](docs/phase2-activation.md) confirms the current key's Free-plan season restriction and records the private JWT fix, current readiness, and backup/restore verification procedure. No subscription purchase or live ingestion has been performed.
 
-## Current Output
+## Scope and current data
 
-| Data | Rows | Unique IDs |
-| --- | ---: | ---: |
-| Matches | 380 | 380 fixture IDs |
-| Teams | 20 | 20 API team IDs |
-| Venues | 20 | 20 venue IDs |
+| Dataset | Matches | Teams | Venues |
+| --- | ---: | ---: | ---: |
+| Committed 2024–25 archive | 380 | 20 | 20 |
+| Configured 2026–27 season | Loaded at runtime | 20 memberships expected | Source-dependent |
 
-The existing project documentation records:
+The three original CSVs under `data/` remain unchanged. Phase 2 stages new batches under ignored `data/staging/`, not in the archive files. Existing canonical team and venue records remain unchanged; current descriptions are stored in season snapshots. Global team/venue counts can grow as clubs change between seasons.
 
-- Zero duplicate fixture IDs
-- Zero broken team-to-venue relationships
-- One successful five-task Airflow DAG run
-- Repeatable MySQL loads using UPSERT logic
-
-This project is scoped to the Premier League. Old international and mixed-league prototype data has been removed.
+Phase 1 was merged in PR #5, and the existing repository was renamed without losing its history. Phase 2 provides the implementation and reviewed migration files; applying migration 003 and enabling the running Airflow environment are explicit operational steps. A passing mocked/API integration test is not a claim that live 2026–27 data has already been imported into your database.
 
 ## Architecture
 
-```text
-API-FOOTBALL
-      ↓
-Python extraction
-      ↓
-Pandas transformation and validation
-      ↓
-CSV staging
-      ↓
-MySQL UPSERT loaders
-      ↓
-Premier League relational tables
-      ↓
-Post-load data-quality validation
+```mermaid
+flowchart TD
+    API[API-FOOTBALL] --> PLAN[Bootstrap or date window plus unresolved fixture IDs]
+    PLAN --> STAGE[Validated run-scoped JSON staging]
+    STAGE --> LOAD[MySQL fixture-ID UPSERTs and season snapshots]
+    LOAD --> CHECK[Season-aware and historical integrity checks]
+    CHECK --> STATE[Commit per-season success checkpoints]
+    AIRFLOW[Airflow: Monday 06:00 UTC] --> PLAN
 ```
 
-Both the local runner and Apache Airflow use this order:
+Both execution paths preserve this five-task order:
 
 ```text
 extract_matches
-      ↓
-extract_teams_and_venues
-      ↓
-load_teams_and_venues
-      ↓
-load_matches
-      ↓
-validate_data_quality
+  → extract_teams_and_venues
+  → load_teams_and_venues
+  → load_matches
+  → validate_data_quality
 ```
 
-Docker Compose runs the Airflow services, including the API server, scheduler, worker, DAG processor, triggerer, PostgreSQL metadata database, and Redis.
+Airflow uses `schedule="0 6 * * 1"`, UTC, `catchup=False`, two retries five minutes apart, and `max_active_runs=1`. Tasks have a one-hour execution timeout; cancellation terminates their child processes. Manual triggering remains available. A database run-owner guard also prevents a local runner from racing Airflow. Child stdout/stderr and failures remain visible in task logs.
 
-The project uses a shared Docker volume for staged CSV data so every Airflow task can access the same files.
+## Incremental strategy
 
-See [Architecture](docs/architecture.md) and [Data Model](docs/data-model.md) for more detail.
+1. Bootstrap each configured season once using its complete fixture list.
+2. On later runs, fetch from the last successful checkpoint minus a configurable overlap (default 14 days) through the next 14 days. The range widens after missed runs.
+3. Independently recheck overdue scheduled fixtures and uncertain/postponed/interrupted fixtures by ID, in batches of at most 20. Their original date can be outside the window.
+4. Reconcile the configured season in full every 28 days by default. This catches moved fixtures and older corrections that a date filter cannot reveal. The archived 2024 season is never automatically re-downloaded.
+5. Commit checkpoints only after the final quality step succeeds. A valid empty incremental window is a no-op; an empty bootstrap, API error, malformed response, or incomplete ID lookup fails the run.
 
-## Technology
+Full reconciliation must include every previously stored fixture ID for that season. Missing results fail before publishing the batch. Transport failures and transient HTTP errors retry up to three attempts with bounded backoff; authentication, subscription, and malformed-data failures require intervention or a later task retry.
 
-- Python
-- Pandas
-- Requests
-- MySQL
-- API-FOOTBALL
-- Apache Airflow 3.3.1
-- Docker and Docker Compose
-- PostgreSQL for Airflow metadata
-- Redis for Airflow task messaging
-- python-dotenv
-- Git and GitHub
+This is a weekly refresh, not a real-time scores service. Live scores/statuses are captured when a run polls them. Older corrections may wait until the next full active-season reconciliation. See the [API-FOOTBALL fixtures contract](https://www.api-football.com/documentation_v3).
 
-## Database Tables
+## Local setup
 
-| Table | Purpose | Main key |
-| --- | --- | --- |
-| `live_matches` | Fixture dates, teams, and scores | `fixture_id` |
-| `teams` | Club identity and details | `team_id`, unique `api_team_id` |
-| `venues` | Stadium information | `venue_id` |
-
-`teams.venue_id` is a foreign key referencing `venues.venue_id`.
-
-The match table currently stores home and away team names. Replacing them with team foreign keys is a planned normalization step.
-
-## Reliability Features
-
-- API timeouts and HTTP error handling
-- API response validation
-- Required CSV-column validation
-- Duplicate-ID checks
-- Team-to-venue relationship validation
-- Transaction rollback after failed database loads
-- Primary keys, unique keys, foreign keys, and indexes
-- UPSERT loading that prevents duplicate records
-- Airflow task dependencies
-- Airflow retries and task-level logs
-- Shared Docker storage for staged pipeline data
-- Credentials stored outside the source code
-- Separate administrator and application database permissions
-- Post-load checks for row counts, duplicates, missing IDs, invalid scores, and broken relationships
-- Local step start, success, failure, and duration logs; failures stop execution with a nonzero exit code
-- Weekly UTC scheduling with at most one active Airflow DAG run
-- Offline pytest suite and GitHub Actions CI for pushes and pull requests to `main`
-
-Before loading teams, the pipeline checks that every non-null `venue_id` in `teams.csv` exists in `venues.csv`. Missing referenced IDs stop the load before any database write.
-
-## Prerequisites
-
-Before running the project, install:
-
-- Python 3.11 or newer
-- MySQL 8.0 or newer
-- Git
-- Docker Desktop with Docker Compose
-- An API-FOOTBALL account and API key
-
-Confirm the main tools are available:
+Use Python 3.11+ and MySQL 8.0+. Docker Desktop is needed for Airflow, but not for offline tests or the local runner.
 
 ```bash
-python3 --version
-mysql --version
-docker --version
-docker compose version
-```
-
-## Setup
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/Mohamed254-pixel/soccer-data-pipeline.git premier-league-data-pipeline
+git clone https://github.com/Mohamed254-pixel/premier-league-data-pipeline.git
 cd premier-league-data-pipeline
-```
-
-### 2. Create the Python environment
-
-```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install --upgrade pip
-python3 -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
+cp -n .env.example .env
 ```
 
-The clone URL uses the current repository name until the GitHub rename is confirmed. After renaming, use `https://github.com/Mohamed254-pixel/premier-league-data-pipeline.git`.
+Fill in the private API/MySQL values in `.env`. Never commit it. The required application permissions remain `SELECT`, `INSERT`, `UPDATE`, and `DELETE`; schema changes use a separate administrator connection.
 
-### 3. Configure credentials
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Add your API and MySQL values:
+Important settings:
 
 ```dotenv
-API_KEY=your_api_football_key
 FOOTBALL_LEAGUE_ID=39
-FOOTBALL_SEASON=2024
-
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=soccer_app
-DB_PASSWORD=your_private_app_password
-DB_NAME=soccer_db
-
-AIRFLOW_UID=50000
-FERNET_KEY=your_generated_fernet_key
+FOOTBALL_SEASONS=2026
+INCREMENTAL_OVERLAP_DAYS=14
+FULL_RECONCILE_DAYS=28
 ```
 
-Generate a Fernet key locally and paste it into your private `.env`:
+`2026` means the 2026–27 season. A comma-separated value such as `2025,2026` supports multiple update seasons. `2024` is protected and is rejected as an update season. The older `FOOTBALL_SEASON=2024` setting is retained for legacy snapshot helpers; it does not select the incremental refresh season. Optional `PIPELINE_ENV_FILE` points to a private environment file outside the checkout.
+
+### Prepare the existing database
+
+Review [migration 003 and its rollback guards](docs/phase2-migrations.md) before running ETL. Back up the database outside Git, pause the DAG, and use an administrator environment file:
 
 ```bash
-python3 -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
+PIPELINE_ENV_FILE=/private/path/admin.env python scripts/migrate_phase2.py
+PIPELINE_ENV_FILE=/private/path/admin.env python scripts/migrate_phase2.py --apply
 ```
 
-Never commit the `.env` file.
+The first command is a read-only preflight. The migration requires the verified original archive, adds season/status metadata and supporting tables, and preserves all original fixture/date/team/score values. It is not applied automatically by the pipeline.
 
-When the pipeline runs inside Docker on macOS, the Airflow services connect to the host MySQL server through `host.docker.internal`.
-
-### 4. Create the MySQL database
-
-Run `sql/schema.sql` using a MySQL administrator account.
-
-For an existing older database, apply these migrations in order:
-
-```text
-sql/migrations/001_align_live_matches_schema.sql
-sql/migrations/002_add_team_and_venue_schema.sql
-```
-
-The pipeline account only needs `SELECT`, `INSERT`, `UPDATE`, and `DELETE` permissions on `soccer_db`.
-
-## Run Locally With Python
-
-Activate the virtual environment:
+For a fresh empty installation, first run the existing `sql/schema.sql` with an administrator and load the committed archive using the existing CSV helpers, then run migration 003:
 
 ```bash
-source .venv/bin/activate
+# Only for initialising an empty database, before migration 003:
+PYTHONPATH=scripts python -c 'from load_teams import main; main(); from load_live_matches import main; main()'
 ```
 
-Run the complete pipeline:
+Do not use legacy CSV helpers to operate a multi-season database. Normal script entrypoints and the runner use the incremental stages.
+
+### Run the pipeline
+
+With migration 003 applied and application credentials configured:
 
 ```bash
-python3 run_pipeline.py
+python run_pipeline.py
 ```
 
-A successful run refreshes:
+Every step logs its start, success/failure, and duration. Any failure stops downstream steps and exits nonzero. The runner prints a run ID for recovery. Original archive CSVs remain unchanged.
 
-```text
-data/live_matches.csv
-data/teams.csv
-data/venues.csv
-```
+## Docker and Airflow
 
-It then inserts or updates the related MySQL records and automatically runs `scripts/validate_data_quality.py`. A failed extraction, load, or quality check stops the runner and returns a nonzero exit code. Every step logs its start, success or failure, and elapsed seconds; child output and tracebacks remain visible.
-
-### Sample Console Output
-
-```text
-Step 1: Pulling match data from API-FOOTBALL...
-Matches returned: 380
-Saved 380 matches to data/live_matches.csv
-
-Step 2: Pulling team and venue data from API-FOOTBALL...
-Saved 20 teams to data/teams.csv
-Saved 20 venues to data/venues.csv
-
-Step 3: Loading teams and venues into MySQL...
-Loaded or updated 20 venues.
-Loaded or updated 20 Premier League teams.
-
-Step 4: Loading matches into MySQL...
-Loaded or updated 380 live matches.
-
-Step 5: Validating data quality...
-PASS | match row count | actual=380 | expected=380
-...
-All data quality checks passed.
-
-INFO | Pipeline completed successfully.
-```
-
-The example is abbreviated; actual runner logs also include timestamps and per-step durations.
-
-## Automated Testing and CI
-
-Install the development dependencies and run the offline tests:
+For a new environment, generate independent Fernet and JWT keys and put them in the private `.env`. Preserve any existing Fernet key used to encrypt Airflow values:
 
 ```bash
-source .venv/bin/activate
-python3 -m pip install -r requirements-dev.txt
-python3 -m pytest
+python -c 'import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
+python -c 'import secrets; print(secrets.token_urlsafe(48))'
 ```
 
-`requirements-dev.txt` includes the same four runtime packages used by the Airflow image plus pytest; it does not install the optional notebook stack or Airflow itself. Tests disable `.env` loading and block unmocked HTTP and MySQL connections. They cover API parsing and failures, match transformations, required columns, dates and scores, duplicate IDs, team/venue relationships, UPSERT parameters, transaction rollback, runner failures, post-load quality checks, the committed CSV snapshot, and the DAG schedule and child-process logs.
+The first value is `FERNET_KEY`, the second is `AIRFLOW__API_AUTH__JWT_SECRET`. Compose refuses missing keys. UI ports bind to loopback. This Compose stack retains local development metadata credentials and requires further access/security configuration before hosting publicly.
 
-[GitHub Actions CI](.github/workflows/tests.yml) installs these dependencies on Python 3.11 and runs pytest for pushes to `main` and pull requests targeting `main`. No repository secrets or database services are required. The workflow is implemented; a successful hosted CI run must be confirmed on GitHub after pushing and opening a pull request.
+Run read-only checks before requesting activation approval:
 
-The DAG tests in the lightweight suite inspect its syntax/settings and exercise the process helper. Check full Airflow imports in the Airflow environment using the commands below.
+```bash
+python scripts/check_readiness.py --env-file /private/path/runtime.env --api
+```
 
-## Run With Docker and Airflow
+This reads database integrity, Docker/Compose/service health, and small API entitlement probes; it consumes API quota but never starts services, migrates, stages data, or ingests fixtures. Exit zero requires all checks, including running healthy Airflow services, to pass. Before migration/startup, a nonzero result is expected. Omit `--api` to avoid HTTP probes; API readiness then remains unverified and the command exits nonzero.
 
-### 1. Validate the Docker Compose file
+Start Docker Desktop, then:
 
 ```bash
 docker compose config --quiet
-```
-
-No output means the configuration is valid.
-
-### 2. Build the custom Airflow image
-
-```bash
 docker compose build
-```
-
-The first build can take several minutes because Docker must download and install the required packages.
-
-### 3. Initialize Airflow
-
-```bash
 docker compose up airflow-init
-```
-
-A successful initialization ends with:
-
-```text
-airflow-init-1 exited with code 0
-```
-
-### 4. Start the Airflow services
-
-```bash
 docker compose up -d
-```
-
-Check their status:
-
-```bash
 docker compose ps
+docker compose exec airflow-scheduler airflow dags list-import-errors
 ```
 
-Wait until the main Airflow services show `healthy`.
-
-### 5. Open the Airflow interface
-
-Open:
-
-[http://localhost:8080](http://localhost:8080)
-
-Default local credentials:
-
-```text
-Username: airflow
-Password: airflow
-```
-
-Find the `premier_league_etl` DAG and select **Trigger** to start a manual pipeline run.
-
-The schedule is `0 6 * * 1`: **every Monday at 06:00 UTC**, with `catchup=False` and `max_active_runs=1`. Each task has two retries separated by five minutes. Manual triggering remains available.
-
-New DAGs are paused by default in this Compose configuration. Unpause `premier_league_etl` in the interface, or run:
+Open [Airflow](http://localhost:8080). The existing local development defaults are `airflow` / `airflow`; these are not production credentials. Wait for healthy services and unpause the DAG for weekly scheduling:
 
 ```bash
 docker compose exec airflow-scheduler airflow dags unpause premier_league_etl
 ```
 
-The scheduler and workers must remain running for automatic execution. This phase refreshes the fixed 2024 season in full; it does not switch seasons or implement incremental loading. Avoid running the local runner while Airflow is writing the same staged CSV files.
-
-### 6. Check for DAG import errors
+Check tasks and runs:
 
 ```bash
-docker compose exec airflow-scheduler airflow dags list-import-errors
-```
-
-A correctly loaded DAG returns:
-
-```text
-No data found
-```
-
-In this command, `No data found` means Airflow found no import errors.
-
-### 7. Check previous DAG runs
-
-```bash
+docker compose exec airflow-scheduler airflow tasks list premier_league_etl
 docker compose exec airflow-scheduler airflow dags list-runs premier_league_etl
 ```
 
-### 8. Stop Airflow
+The scheduler and workers must stay running for scheduled updates. Airflow tasks use the same run ID across all five stages. MySQL remains on the Mac host via `host.docker.internal`; PostgreSQL/Redis still serve Airflow only. The existing named data volume is retained for staging. A separate read-only mount exposes the committed archive at `/opt/soccer/historical-data`, so an empty staging volume cannot hide it.
+
+`docker compose down` stops the services while retaining volumes. Do not remove named volumes as part of routine operation.
+
+## Validation and tests
+
+Validation checks the original historical match/team/venue values against their committed CSVs, fixture identities, classification/status fields, final-score completeness, and 20 team memberships per configured season. Current-season fixture counts may be incomplete, up to the Premier League's 380 fixtures. There is no global requirement that the database contain exactly 380 matches or 20 teams. Foreign keys enforce fixture-to-season-team and venue relationships.
+
+Scheduled and postponed fixtures may have null scores; finished `FT`, `AET`, and `PEN` fixtures require both scores. Unknown kickoff times are allowed only for `TBD` and `PST`. Cancelled, abandoned, technical-loss, and walkover statuses are retained without fabricating scores.
 
 ```bash
-docker compose down
+python -m pytest
 ```
 
-The named Docker volumes preserve Airflow metadata and staged pipeline data.
+The default suite uses mocked API/database boundaries and needs no API credentials or MySQL server. Real MySQL tests are opt-in and create only randomly named disposable test databases. For an explicitly designated test server:
 
-Avoid using `docker compose down -v` unless you intentionally want to delete the stored Docker volume data.
-
-## Verification
-
-Run `python3 -m pytest` for the offline suite. With Airflow running, check imports using `docker compose exec airflow-scheduler airflow dags list-import-errors`, and inspect the five tasks using `docker compose exec airflow-scheduler airflow tasks list premier_league_etl`.
-
-The automated final step expects the completed 2024 snapshot: 380 matches, 20 teams, 20 venues, valid IDs and relationships, and populated nonnegative scores. These checks are deliberately fixed to this dataset; another season or additional datasets require a separate validation policy. Nullable scores remain supported by the schema and loader for unfinished fixtures, but the completed-season quality checks reject them.
-
-Verify the final MySQL row counts:
-
-```sql
-SELECT COUNT(*), COUNT(DISTINCT fixture_id)
-FROM live_matches;
-
-SELECT COUNT(*), COUNT(DISTINCT api_team_id)
-FROM teams;
-
-SELECT COUNT(*), COUNT(DISTINCT venue_id)
-FROM venues;
+```bash
+PIPELINE_TEST_MYSQL_HOST=127.0.0.1 \
+PIPELINE_TEST_MYSQL_PASSWORD=your_disposable_test_password \
+python -m pytest
 ```
 
-Expected results:
+For an isolated local server with networking disabled, set `PIPELINE_TEST_MYSQL_SOCKET` instead. Never point the test environment at an application account. The suite verifies migration up/down/resume, inserts and corrections, postponed fixtures, repeated runs, multiple seasons, duplicate/unique-key protection, failure handling, archive preservation, and the complete five-stage flow with a mocked API and real MySQL.
+
+[GitHub Actions](.github/workflows/tests.yml) runs Python 3.11 tests on pushes and pull requests to `main`. A second job runs the full suite against an ephemeral MySQL 8.0 service. A third imports the actual Airflow 3.3.1 DAG and verifies task dependencies, schedule, retries, and timeouts with `python scripts/check_dag.py`. Its test-only database password is not an application secret. No API key or application credentials are needed.
+
+## Recovery and troubleshooting
+
+- **Missing migration/table:** run the read-only preflight and review/apply migration 003 using an administrator. The ETL never creates or alters tables.
+- **API key/quota/current-season access:** check your API-FOOTBALL dashboard. An existing key does not prove access to the 2026 season. API errors fail the run without writing a fixture batch or advancing its checkpoint. Error payloads/credentials are not echoed.
+- **Another run is pending:** resume the same run ID rather than starting an overlapping run. The six-hour run-owner lease prevents permanent blockage after a dead process; a later extraction can replace an expired owner and fences out its old worker. After stopping any old worker, retry locally with `PIPELINE_RUN_ID=the_original_run_id python run_pipeline.py`. Airflow retries already reuse the same ID.
+- **Abandoned or invalid frozen batch:** stop its workers, then explicitly release the owner with `python scripts/incremental.py release-run the_original_run_id`. Start a new run ID to refetch. Releasing does not delete records or advance checkpoints.
+- **Quality failure:** inspect task logs. Transactions are per loader; a later quality failure does not undo committed loads. It keeps the checkpoint unchanged and the owner pending so a retry can validate the same data. UPSERTs make repeated loads safe.
+- **Historical mismatch:** stop and investigate; never fix it by overwriting the archive to match the database. Compare the trusted committed CSVs and your backup.
+- **Weekly run absent:** confirm the DAG is unpaused, the services are healthy, and no previous run is active. The schedule is UTC and its local time changes with daylight saving time.
+- **Docker unavailable:** offline tests still work. A syntax-only Compose check needs no secrets or daemon:
+
+```bash
+python scripts/check_readiness.py --compose-example
+```
+
+Run-scoped staging is retained for retries and audit. Archive old completed staging files only after confirming no active run needs them. Do not edit a pending batch; release it and start a fresh run instead.
+
+## Project layout
 
 ```text
-Matches: 380 total, 380 unique fixture IDs
-Teams:   20 total, 20 unique API team IDs
-Venues:  20 total, 20 unique venue IDs
+dags/soccer_pipeline_dag.py          # Same five tasks and weekly UTC schedule
+run_pipeline.py                    # Local execution and per-step logging
+scripts/incremental.py             # API parsing, planning, staging, stage dispatch
+scripts/season_store.py            # Transactional loading, run guard, checkpoints
+scripts/migrate_phase2.py          # Explicit guarded migration/preflight
+scripts/api_*.py, load_*.py        # Stage entrypoints and archive helpers
+sql/schema.sql                     # Original Phase 1 schema, unchanged
+sql/migrations/003_*.sql            # Additive metadata and guarded down migration
+data/*.csv                         # Original 2024 snapshots, unchanged
+data/staging/                      # Ignored run manifests
+tests/                             # Offline tests and opt-in MySQL integration tests
+.github/workflows/tests.yml         # Python 3.11 and MySQL 8.0 CI
 ```
 
-## Troubleshooting
+## Future work
 
-### Docker daemon connection error
+AWS S3/RDS, dbt, additional football datasets, monitoring/alerts, and dashboards remain future work. AWS, Kafka, Spark, and dbt are not implemented in Phase 2.
 
-If Docker reports that it cannot connect to the Docker daemon, open Docker Desktop and wait until the engine finishes starting.
-
-Confirm it is running:
-
-```bash
-docker ps
-```
-
-### Docker Compose YAML error
-
-Validate the file:
-
-```bash
-docker compose config --quiet
-```
-
-Check the reported line for duplicate YAML keys or incorrect indentation.
-
-If `.env` is missing, copy `.env.example` to `.env` and fill in the private values. For a syntax-only check without credentials or a Docker daemon:
-
-```bash
-ENV_FILE_PATH=.env.example FERNET_KEY='' AIRFLOW_UID=50000 docker compose --env-file .env.example config --quiet
-```
-
-This validates configuration only; it does not prove that containers start. If Fernet initialization fails, generate a valid key as shown in Setup and set `FERNET_KEY` in `.env`.
-
-### Airflow DAG does not appear
-
-Check for import errors:
-
-```bash
-docker compose exec airflow-scheduler airflow dags list-import-errors
-```
-
-Confirm the DAG exists:
-
-```bash
-docker compose exec airflow-scheduler airflow dags list | grep premier_league_etl
-```
-
-### Airflow task fails
-
-Open the failed task in the Airflow interface and select **Logs**.
-
-You can also check container logs:
-
-```bash
-docker compose logs airflow-worker
-docker compose logs airflow-scheduler
-```
-
-Child stdout/stderr and exceptions appear in the task log. Failed child scripts raise an exception so Airflow can retry and ultimately mark the task failed. Validation runs only after both loads succeed.
-
-### Weekly run does not start
-
-Confirm the DAG is unpaused, the scheduler and workers are healthy, and no previous run is still active. The schedule is UTC, so its local time changes with daylight saving time.
-
-### Tests fail or pytest is missing
-
-Activate the project virtual environment and install `requirements-dev.txt`. Use `python3 -m pytest` from the repository root. Tests require no `.env`, API account, or running MySQL; a dependency installation failure should be resolved before interpreting test results.
-
-### Local validation fails
-
-Read the `FAIL` lines and correct the source data or connection configuration. The pipeline deliberately exits unsuccessfully when final row counts or quality checks fail. Each loader commits its own transaction; a later quality failure does not undo already committed loads. Correct the issue and rerun; UPSERTs preserve repeatability.
-
-### API authentication failure
-
-The `API_KEY` in `.env` is missing or invalid. Compare it with the key in your API-FOOTBALL dashboard.
-
-### API rate-limit error
-
-Wait for the API limit to reset before running the extraction again.
-
-### MySQL access denied
-
-Confirm that `sql/schema.sql` was run with an administrator account and that `soccer_app` has `SELECT`, `INSERT`, `UPDATE`, and `DELETE` permissions on `soccer_db`.
-
-### Team-to-venue validation failure
-
-A non-null venue ID in `data/teams.csv` is missing from `data/venues.csv`. Compare the IDs in both files and correct the incomplete extraction before rerunning the loader.
-
-### Schema mismatch
-
-Apply both migration files in order before running the pipeline against an older database.
-
-## Project Structure
-
-```text
-premier-league-data-pipeline/
-├── config/
-├── dags/
-│   └── soccer_pipeline_dag.py
-├── data/
-│   ├── live_matches.csv
-│   ├── teams.csv
-│   └── venues.csv
-├── docs/
-│   ├── architecture.md
-│   ├── data-model.md
-│   └── phase1-review.md
-├── tests/
-├── .github/workflows/tests.yml
-├── logs/
-├── plugins/
-├── scripts/
-│   ├── api_matches.py
-│   ├── api_teams.py
-│   ├── db.py
-│   ├── load_live_matches.py
-│   ├── load_teams.py
-│   └── validate_data_quality.py
-├── sql/
-│   ├── migrations/
-│   ├── analytics.sql
-│   └── schema.sql
-├── .env.example
-├── .gitignore
-├── docker-compose.yaml
-├── Dockerfile
-├── LICENSE
-├── requirements-airflow.txt
-├── requirements.txt
-├── requirements-dev.txt
-├── pytest.ini
-├── run_pipeline.py
-└── README.md
-```
-
-The `config/airflow.cfg` file and Airflow `logs/` directory are generated locally and ignored by Git.
-
-## Planned Improvements
-
-The extraction/load workflow, validation, weekly scheduling, tests, and CI configuration are implemented. The following remain future work:
-
-- Replace match team names with team foreign keys
-- Add incremental loading
-- Add pipeline freshness monitoring
-- Store raw API responses in Amazon S3
-- Deploy the database to Amazon RDS
-- Add dbt transformations
-- Add standings, player statistics, and match events
-- Add monitoring, alerts, and optional dashboards
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+Licensed under [MIT](LICENSE).
