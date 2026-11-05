@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from load_teams import prepare_team_rows, prepare_venue_rows
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(PROJECT_ROOT / ".env")
@@ -37,24 +38,38 @@ def fetch_teams_and_venues():
     except ValueError as exc:
         raise RuntimeError("API-FOOTBALL returned invalid JSON.") from exc
 
+    return parse_teams_and_venues(payload)
+
+
+def parse_teams_and_venues(payload):
+    """Parse teams and optional venues, retaining a stable CSV schema."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("API-FOOTBALL response must be a JSON object.")
     if payload.get("errors"):
-        raise RuntimeError(f"API-FOOTBALL error: {payload['errors']}")
+        raise RuntimeError("API-FOOTBALL reported an error. Check API access and quota.")
 
     api_results = payload.get("response")
-    if not isinstance(api_results, list):
-        raise RuntimeError("API response did not contain a team list.")
+    if not isinstance(api_results, list) or not api_results:
+        raise RuntimeError("API response must contain a nonempty team list.")
 
     teams = []
     venues = []
 
     for result in api_results:
+        if not isinstance(result, dict):
+            raise RuntimeError("Each team result must be a JSON object.")
         team = result.get("team") or {}
         venue = result.get("venue") or {}
+        if not isinstance(team, dict) or not isinstance(venue, dict):
+            raise RuntimeError("Team and venue fields must be JSON objects.")
 
         if team.get("id") is None or not team.get("name"):
             raise RuntimeError("A team is missing its ID or name.")
 
         venue_id = venue.get("id")
+        national = team.get("national", False)
+        if not isinstance(national, bool):
+            raise RuntimeError("Team national flag must be a boolean.")
 
         teams.append(
             {
@@ -65,7 +80,7 @@ def fetch_teams_and_venues():
                 "league": "Premier League",
                 "stadium": venue.get("name"),
                 "founded": team.get("founded"),
-                "is_national": int(bool(team.get("national"))),
+                "is_national": int(national),
                 "logo_url": team.get("logo"),
                 "venue_id": venue_id,
             }
@@ -86,10 +101,14 @@ def fetch_teams_and_venues():
 
     teams_df = pd.DataFrame(teams).sort_values("team_name")
     venues_df = (
-        pd.DataFrame(venues)
+        pd.DataFrame(venues, columns=[
+            "venue_id", "venue_name", "address", "city", "capacity", "surface", "image_url"
+        ])
         .drop_duplicates(subset=["venue_id"])
         .sort_values("venue_id")
     )
+    prepare_team_rows(teams_df)
+    prepare_venue_rows(venues_df)
 
     return teams_df, venues_df
 

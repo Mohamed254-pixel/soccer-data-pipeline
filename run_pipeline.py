@@ -1,26 +1,30 @@
 from pathlib import Path
+import logging
 import subprocess
 import sys
+from time import perf_counter
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+LOGGER = logging.getLogger(__name__)
 
 
 def run_step(label, script_path):
-    print(f"\n{label}")
-
-    result = subprocess.run(
-        [sys.executable, str(script_path)],
-        cwd=PROJECT_ROOT,
-    )
-
-    if result.returncode != 0:
-        raise SystemExit(
-            f"\nPipeline stopped because a step failed "
-            f"(exit code {result.returncode})."
+    started = perf_counter()
+    LOGGER.info("START | %s", label)
+    try:
+        subprocess.run(
+            [sys.executable, "-u", str(script_path)],
+            cwd=PROJECT_ROOT,
+            check=True,
         )
+    except (subprocess.CalledProcessError, OSError) as exc:
+        LOGGER.exception("FAIL | %s | duration=%.2fs", label, perf_counter() - started)
+        raise SystemExit(getattr(exc, "returncode", 1) or 1) from exc
+    LOGGER.info("SUCCESS | %s | duration=%.2fs", label, perf_counter() - started)
 
 
 def main():
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
     run_step(
         "Step 1: Pulling match data from API-FOOTBALL...",
         PROJECT_ROOT / "scripts" / "api_matches.py",
@@ -41,7 +45,12 @@ def main():
         PROJECT_ROOT / "scripts" / "load_live_matches.py",
     )
 
-    print("\nPipeline completed successfully.")
+    run_step(
+        "Step 5: Validating data quality...",
+        PROJECT_ROOT / "scripts" / "validate_data_quality.py",
+    )
+
+    LOGGER.info("Pipeline completed successfully.")
 
 
 if __name__ == "__main__":

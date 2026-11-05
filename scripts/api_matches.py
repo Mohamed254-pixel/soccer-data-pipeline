@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 from dotenv import load_dotenv
+from load_live_matches import prepare_rows
 
 load_dotenv()
 
@@ -38,17 +39,25 @@ def fetch_matches():
     except ValueError as exc:
         raise RuntimeError("API-FOOTBALL returned invalid JSON.") from exc
 
+    return parse_matches(payload)
+
+
+def parse_matches(payload):
+    """Parse and validate API fixtures before replacing staged data."""
+    if not isinstance(payload, dict):
+        raise RuntimeError("API-FOOTBALL response must be a JSON object.")
     if payload.get("errors"):
-        raise RuntimeError(f"API-FOOTBALL error: {payload['errors']}")
+        # Do not echo external error payloads, which may contain credentials.
+        raise RuntimeError("API-FOOTBALL reported an error. Check API access and quota.")
 
     fixtures = payload.get("response")
-    if not isinstance(fixtures, list):
-        raise RuntimeError("API-FOOTBALL response did not contain a fixture list.")
+    if not isinstance(fixtures, list) or not fixtures:
+        raise RuntimeError("API-FOOTBALL response must contain a nonempty fixture list.")
 
     matches = []
     for match in fixtures:
-        matches.append(
-            {
+        try:
+            record = {
                 "fixture_id": match["fixture"]["id"],
                 "date": match["fixture"]["date"],
                 "home_team": match["teams"]["home"]["name"],
@@ -56,9 +65,11 @@ def fetch_matches():
                 "home_goals": match["goals"]["home"],
                 "away_goals": match["goals"]["away"]
             }
-        )
+        except (KeyError, TypeError) as exc:
+            raise RuntimeError("A fixture is missing required fields.") from exc
+        matches.append(record)
 
-    return pd.DataFrame(
+    df = pd.DataFrame(
         matches,
         columns=[
             "fixture_id",
@@ -69,6 +80,8 @@ def fetch_matches():
             "away_goals",
         ],
     )
+    prepare_rows(df)
+    return df
 
 
 def main():

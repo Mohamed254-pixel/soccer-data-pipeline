@@ -16,9 +16,10 @@ def get_count(cursor, query):
 
 def main():
     connection = get_connection()
-    cursor = connection.cursor()
+    cursor = None
 
     try:
+        cursor = connection.cursor()
         checks = [
             (
                 "match row count",
@@ -148,8 +149,11 @@ def main():
         print("All data quality checks passed.")
 
     finally:
-        cursor.close()
-        connection.close()
+        try:
+            if cursor is not None:
+                cursor.close()
+        finally:
+            connection.close()
 
 
 if __name__ == "__main__":
