@@ -23,6 +23,7 @@ import requests
 
 from api_teams import parse_teams_and_venues
 import season_store as store
+import source_ids
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,6 +70,9 @@ def utc_datetime(value):
 
 def settings():
     load_dotenv(os.getenv("PIPELINE_ENV_FILE", ROOT / ".env"))
+    provider = os.getenv("FOOTBALL_SOURCE", source_ids.API)
+    if provider not in {source_ids.API, source_ids.FD}:
+        raise ValueError("FOOTBALL_SOURCE must be api_football or football_data.")
     seasons = tuple(sorted({integer(x.strip(), "season", 2000, maximum=2100)
                             for x in os.getenv("FOOTBALL_SEASONS", "2026").split(",")}))
     if 2024 in seasons:
@@ -82,7 +86,7 @@ def settings():
     if len(run_id) > 250:
         raise ValueError("PIPELINE_RUN_ID must fit VARCHAR(250).")
     staging = Path(os.getenv("PIPELINE_STAGING_DIR", ROOT / "data/staging"))
-    return {"seasons": list(seasons), "league": league, "run_id": run_id,
+    return {"seasons": list(seasons), "league": league, "run_id": run_id, "provider": provider,
             "path": staging / (hashlib.sha256(run_id.encode()).hexdigest() + ".json"),
             "overlap_days": integer(os.getenv("INCREMENTAL_OVERLAP_DAYS", "14"), "overlap days", 7, maximum=365),
             "reconcile_days": integer(os.getenv("FULL_RECONCILE_DAYS", "28"), "reconciliation days", 7, maximum=365)}
@@ -244,7 +248,7 @@ def extract_batch(config, states, pending, now):
                 if old and old["season"] != row["season"]:
                     raise ValueError("A fixture ID appeared in multiple seasons.")
                 matches[row["fixture_id"]] = row
-    return {"version": 2, "run_id": config["run_id"], "league": config["league"],
+    return {"version": 2, "provider": source_ids.API, "run_id": config["run_id"], "league": config["league"],
             "seasons": config["seasons"], "started_at": now.isoformat(), "plans": plans,
             "matches": sorted(matches.values(), key=lambda row: row["fixture_id"]), "stage": "extract_matches"}
 
@@ -269,6 +273,11 @@ def read_manifest(config):
     manifest = json.loads(config["path"].read_text())
     if any(manifest.get(key) != config[key] for key in ("run_id", "league", "seasons")) or manifest.get("version") != 2:
         raise ValueError("Staging identity/configuration does not match this run.")
+    if manifest.get("provider", source_ids.API) != config.get("provider", source_ids.API):
+        raise ValueError("Staged provider differs from this run's source configuration.")
+    if manifest.get("provider") == source_ids.FD:
+        from football_data import validate_manifest
+        validate_manifest(manifest)
     return manifest
 
 
@@ -311,6 +320,7 @@ def execute_stage(stage, config):
 
 
 def _execute_stage(stage, config):
+    provider = config.get("provider", source_ids.API)
     if stage == "extract_matches":
         if config["path"].exists():
             # Airflow retries retain one frozen run observation, not a mixture of
@@ -319,8 +329,13 @@ def _execute_stage(stage, config):
             print("Reusing this run's validated extraction batch.")
             return
         started_at = datetime.now(timezone.utc).replace(tzinfo=None)
-        states, pending, started_at = store.extraction_state(config["seasons"], config["run_id"], started_at)
-        manifest = extract_batch(config, states, pending, started_at)
+        if provider == source_ids.FD:
+            import football_data
+            states, pending, started_at = store.extraction_state(config["seasons"], config["run_id"], started_at, provider)
+            manifest = football_data.extract_batch(config, states, pending, started_at, football_data.Client())
+        else:
+            states, pending, started_at = store.extraction_state(config["seasons"], config["run_id"], started_at)
+            manifest = extract_batch(config, states, pending, started_at)
         save_manifest(config, manifest)
         print(f"Staged {len(manifest['matches'])} fixtures for {config['seasons']}.")
         return
@@ -335,7 +350,13 @@ def _execute_stage(stage, config):
         return
     if stage == "extract_teams_and_venues":
         batches = []
+        if provider == source_ids.FD:
+            import football_data
+            client = football_data.Client()
         for season in config["seasons"]:
+            if provider == source_ids.FD:
+                batches.append(football_data.team_batch(client.request("competitions/PL/teams", {"season":season}),season))
+                continue
             values = request_api("teams", {"league": 39, "season": season})
             teams, venues = parse_teams_and_venues({"response": values})
             if len(teams) != 20:

@@ -4,11 +4,14 @@
 
 Phase 2 extends the existing five-stage pipeline with incremental fixture updates and explicit season identity. It preserves the committed 2024–25 snapshot and defaults to refreshing 2026–27. API season identifiers are starting years; multiple update seasons are configurable. League 39 is enforced.
 
+The [football-data.org follow-up](football-data-source.md) adds `FOOTBALL_SOURCE=football_data` while retaining `api_football` as the default. Both adapters share staging, transactional loaders, validation, ownership, and checkpoints. Canonical Premier League identity is fixed, mapped from API-FOOTBALL league 39 or football-data.org competition PL/2021. Migration 004 separates provider IDs and binds each season to one source. Do not mix provider namespaces or automatically switch an existing season.
+
 ## Execution and data flow
 
 ```mermaid
 flowchart LR
-    API[API-FOOTBALL] --> EXTRACT[Validate and stage fixtures]
+    API[API-FOOTBALL adapter] --> EXTRACT[Validate and stage fixtures]
+    FD[football-data.org adapter] --> EXTRACT
     EXTRACT --> TEAMS[Stage season teams and venues]
     TEAMS --> MEMBERS[Load canonical additions and season snapshots]
     MEMBERS --> MATCHES[UPSERT fixtures by ID]
@@ -25,6 +28,8 @@ The original task names remain: `extract_matches`, `extract_teams_and_venues`, `
 A new season has no successful checkpoint, so its fixture list is bootstrapped once. Later runs request the date range from `last_success_at - overlap` through two weeks ahead. Missing weekly runs widen this range automatically. Default overlap is 14 days.
 
 The planner additionally rechecks uncertain fixtures by ID regardless of date: TBD, postponed, suspended, interrupted, abandoned/cancelled, live periods, and overdue scheduled fixtures. ID lists are bounded to the documented 20-fixture limit. A periodic full reconciliation of configured seasons (28 days by default) catches older corrections and fixtures moved across the window. The 2024 archive cannot be selected for refreshing.
+
+For football-data.org, bootstrap/full reconciliation requests `/v4/competitions/PL/matches?season=2026`. Incremental windows use `dateFrom`/`dateTo`; unresolved fixtures absent from that window are fetched individually at `/v4/matches/{raw_source_id}`. The adapter checks result counts, league/season identity, known fixture coverage, and all source-to-canonical IDs. A client spaces calls by at least 6.1 seconds, reads remaining/reset headers, and bounds retries for 429/5xx/transport failures. Longer provider waits fail for a later Airflow retry. Both credentials are headers, never query parameters.
 
 API-FOOTBALL does not document an updated-since filter for fixtures, so a date window alone is insufficient. References: [fixtures documentation](https://www.api-football.com/documentation_v3), [official league extraction examples](https://www.api-football.com/news/post/how-to-get-all-data-from-a-league-with-api-football).
 

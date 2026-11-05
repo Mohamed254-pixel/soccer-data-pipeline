@@ -4,6 +4,8 @@
 
 The existing tables are preserved. Migration 003 adds match metadata and three supporting tables. `2024` means 2024–25; `2026` means 2026–27. Never infer season by taking the calendar year of a kickoff date.
 
+After optional migration 004, `fixture_id`, `api_team_id`, and fixture team references are **canonical numeric IDs**, not interchangeable provider IDs. API-FOOTBALL IDs remain unchanged. football-data.org fixture IDs occupy the upper half of BIGINT UNSIGNED; its team IDs occupy the upper half of INT UNSIGNED. Raw IDs, provider names, season bindings, FK/unique/CHECK constraints, and team-name scope are described in [the source registry design](football-data-source.md). SQL consumers and exports must retain integer precision; JavaScript numbers/floating-point conversions cannot represent the fixture namespace safely.
+
 ```mermaid
 erDiagram
     VENUES ||--o{ TEAMS : canonical_venue
@@ -110,3 +112,5 @@ The singleton row `control_id=1` enables/disables Phase 2, records the pending r
 Validation compares every original fixture/date/name/score tuple and every original canonical team/venue row against the committed CSVs, not merely a count of 380. New season records do not replace or delete historical rows. The trusted CSV files are mounted read-only in Docker and never used as incremental staging targets.
 
 Migration 003 is explicit and guarded. It preflights the exact archive before DDL, supports resuming an interrupted up migration, and permits schema rollback only before incremental ingestion. After new seasons are loaded, rollback refuses to discard their metadata or rows; stop the scheduler and retain the additive schema instead. See [migration and recovery instructions](phase2-migrations.md).
+
+Migration 004 is separate and not automatic. It adds `season_sources`, `team_source_ids`, `fixture_source_ids`, and `source_registry_state`; a team provider discriminator scopes the existing name/league unique key, and a composite fixture ID/season index supports source FKs. Original row values and IDs are preserved. Football-data teams remain independent canonical source rows, even when they represent a club seen historically; there is no guessed cross-provider club merge. Stadium text is retained in season team snapshots with null venue_id when no stable venue ID is supplied. Rollback 004 first before considering rollback 003; either rollback must refuse unsafe data loss.

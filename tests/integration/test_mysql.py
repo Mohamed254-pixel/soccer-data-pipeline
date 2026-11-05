@@ -5,7 +5,7 @@ execution can use a separate --skip-networking instance via an explicit socket.
 """
 
 from copy import deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -367,3 +367,206 @@ def test_readiness_is_read_only_before_and_after_migration(mysql_database, monke
     assert cursor.fetchone()["pending_run_id"] is None
     cursor.execute("SELECT COUNT(*) AS total FROM season_sync_state")
     assert cursor.fetchone()["total"] == 0
+
+
+# Provider follow-up: these use the same isolated, random test databases only.
+def football_data_match(status='FINISHED', goals=(2,1), source_id=1208021):
+    return {'id':source_id,'competition':{'id':2021,'code':'PL'},
+            'season':{'startDate':'2026-08-21'},'utcDate':None if status=='POSTPONED' else '2026-11-01T16:30:00Z',
+            'status':status,'homeTeam':{'id':33,'name':'Manchester United'},'awayTeam':{'id':34,'name':'Newcastle'},
+            'score':{'duration':'REGULAR','fullTime':{'home':goals[0],'away':goals[1]}}}
+
+
+def football_data_teams():
+    teams=[{'id':i,'name':f'Source club {i}','venue':'Source ground'} for i in range(33,53)]
+    teams[0]['name']='Manchester United'  # Same natural name and raw ID as historical API-FOOTBALL.
+    teams[1]['name']='Newcastle'
+    return {'competition':{'code':'PL'},'season':{'startDate':'2026-08-21'},'count':20,'teams':teams}
+
+
+def football_data_matches(values):
+    return {'competition':{'code':'PL'},'resultSet':{'count':len(values)},'matches':values}
+
+
+def test_source_migration_up_down_reapply_preserves_archive(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('SELECT COUNT(*) AS total FROM fixture_source_ids')
+    assert cursor.fetchone()['total']==380
+    with pytest.raises(ValueError,match='004 first'):
+        migration.rollback(connection,cursor)
+    migrate_sources.rollback(connection,cursor)
+    assert 'source_registry_state' not in migration.tables_present(cursor)
+    store.assert_historical_snapshot(cursor,ROOT)
+    migrate_sources.apply(connection,cursor)
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_football_data_five_stages_corrections_retries_and_id_collisions(mysql_database,monkeypatch,tmp_path):
+    import football_data as fd
+    import migrate_sources
+    from unittest.mock import Mock
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    response=Mock(side_effect=[football_data_matches([football_data_match('POSTPONED',(None,None))]),football_data_teams(),
+                               football_data_matches([football_data_match()]),football_data_teams()])
+    monkeypatch.setattr(fd.Client,'request',response)
+    config={'provider':'football_data','seasons':[2026],'league':39,'run_id':'fd-first','path':tmp_path/'first.json',
+            'overlap_days':14,'reconcile_days':28}
+    for stage in etl.STAGES:etl.execute_stage(stage,config)
+    for stage in etl.STAGES:etl.execute_stage(stage,config)  # Frozen completed-run retries perform no HTTP/SQL reload.
+    assert response.call_count==2
+    config.update(run_id='fd-correction',path=tmp_path/'correction.json')
+    for stage in etl.STAGES:etl.execute_stage(stage,config)
+    assert not etl.read_manifest(config)['plans']['2026']['full']
+    connection.commit()
+    cursor.execute('SELECT COUNT(*) AS total,COUNT(DISTINCT fixture_id) AS ids FROM live_matches')
+    assert cursor.fetchone()=={'total':381,'ids':381}
+    cursor.execute('SELECT home_goals,status_short FROM live_matches WHERE fixture_id=%s',(2**63+1208021,))
+    assert cursor.fetchone()=={'home_goals':2,'status_short':'FT'}
+    cursor.execute("SELECT source_id,canonical_id FROM fixture_source_ids WHERE provider='football_data'")
+    assert cursor.fetchone()=={'source_id':1208021,'canonical_id':2**63+1208021}
+    cursor.execute("SELECT COUNT(*) AS total FROM teams WHERE team_name='Manchester United'")
+    assert cursor.fetchone()['total']==2
+    cursor.execute('SELECT COUNT(*) AS total FROM venues')
+    assert cursor.fetchone()['total']==20
+    store.assert_historical_snapshot(cursor,ROOT)
+    with pytest.raises(ValueError,match='bindings/data'):
+        migrate_sources.rollback(connection,cursor)
+    with pytest.raises(ValueError,match='another provider'):
+        store.extraction_state([2026],'wrong-provider',datetime.now(timezone.utc).replace(tzinfo=None),provider='api_football')
+
+
+def test_source_migration_partial_up_resumes_and_drift_is_rejected(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    for statement in migration.statements(migration.MIGRATIONS/'004_source_registry.up.sql'):
+        cursor.execute(statement)
+        connection.commit()
+        if '-- step: teams' in statement:break
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('ALTER TABLE team_source_ids DROP CHECK chk_team_namespace')
+    connection.commit()
+    with pytest.raises(ValueError,match='constraint'):
+        migrate_sources.apply(connection,cursor)
+
+
+def test_source_constraints_block_bad_namespace_and_cross_season_mapping(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('SELECT fixture_id FROM live_matches LIMIT 1')
+    fixture_id=cursor.fetchone()['fixture_id']
+    with pytest.raises(mysql.connector.Error):
+        cursor.execute("INSERT INTO team_source_ids VALUES ('football_data',100,100)")
+    with pytest.raises(mysql.connector.Error):
+        cursor.execute("UPDATE fixture_source_ids SET season=2026 WHERE canonical_id=%s",(fixture_id,))
+    connection.rollback()
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_fd_requires_004_and_invalid_source_leaves_no_owner_or_checkpoint(mysql_database,monkeypatch,tmp_path):
+    import migrate_sources
+    import football_data as fd
+    from unittest.mock import Mock
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    with pytest.raises(RuntimeError,match='004'):
+        store.extraction_state([2026],'no-registry',datetime.now(),provider='football_data')
+    connection.commit()
+    cursor.execute('SELECT pending_run_id FROM pipeline_control WHERE control_id=1')
+    assert cursor.fetchone()['pending_run_id'] is None
+    migrate_sources.apply(connection,cursor)
+    bad=football_data_match();bad['season']['startDate']='2025-08-01'
+    monkeypatch.setattr(fd.Client,'request',Mock(return_value=football_data_matches([bad])))
+    config={'provider':'football_data','seasons':[2026],'league':39,'run_id':'invalid-fd','path':tmp_path/'bad.json',
+            'overlap_days':14,'reconcile_days':28}
+    with pytest.raises(ValueError):etl.execute_stage('extract_matches',config)
+    assert not config['path'].exists()
+    connection.commit()
+    cursor.execute('SELECT COUNT(*) AS total FROM live_matches')
+    assert cursor.fetchone()['total']==380
+    cursor.execute('SELECT COUNT(*) AS total FROM season_sync_state')
+    assert cursor.fetchone()['total']==0
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_api_football_still_loads_with_source_registry(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    at=datetime(2026,11,2,6)
+    run=manifest('api-after-004',at,[match()])
+    complete_run(run,at)
+    connection.commit()
+    cursor.execute("SELECT source_id,canonical_id FROM fixture_source_ids WHERE season=2026")
+    assert cursor.fetchone()=={'source_id':2000001,'canonical_id':2000001}
+    with pytest.raises(ValueError,match='another provider'):
+        store.extraction_state([2026],'fd-switch',at+timedelta(days=7),provider='football_data')
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_football_data_multiple_seasons_with_independent_checkpoints(mysql_database,monkeypatch,tmp_path):
+    import migrate_sources
+    import football_data as fd
+    from unittest.mock import Mock
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    older=football_data_match(source_id=1208020);older['season']['startDate']='2025-08-01';older['utcDate']='2025-11-01T16:30:00Z'
+    older_teams=football_data_teams();older_teams['season']['startDate']='2025-08-01'
+    monkeypatch.setattr(fd.Client,'request',Mock(side_effect=[football_data_matches([older]),football_data_matches([football_data_match()]),older_teams,football_data_teams()]))
+    config={'provider':'football_data','seasons':[2025,2026],'league':39,'run_id':'fd-multiple','path':tmp_path/'multi.json',
+            'overlap_days':14,'reconcile_days':28}
+    for stage in etl.STAGES:etl.execute_stage(stage,config)
+    connection.commit()
+    cursor.execute('SELECT season FROM season_sync_state ORDER BY season')
+    assert [r['season'] for r in cursor.fetchall()]==[2025,2026]
+    cursor.execute('SELECT COUNT(*) AS total FROM live_matches')
+    assert cursor.fetchone()['total']==382
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_source_migration_rejects_nonunique_identity_index(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('ALTER TABLE teams DROP INDEX uq_team_name_league, ADD INDEX uq_team_name_league (team_name,league,source_provider)')
+    connection.commit()
+    with pytest.raises(ValueError,match='unique identity'):
+        migrate_sources.apply(connection,cursor)
+
+
+def test_source_rollback_resumes_after_partial_table_cleanup(mysql_database):
+    import migrate_sources
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    cursor.execute('UPDATE source_registry_state SET ready=FALSE WHERE control_id=1')
+    connection.commit()
+    cursor.execute('DROP TABLE fixture_source_ids')
+    connection.commit()
+    migrate_sources.rollback(connection,cursor)
+    assert not (migrate_sources.TABLES & migration.tables_present(cursor))
+    store.assert_historical_snapshot(cursor,ROOT)
+
+
+def test_readonly_readiness_validates_source_registry_and_bindings(mysql_database,monkeypatch):
+    import migrate_sources
+    import check_readiness
+    connection,cursor=mysql_database
+    migration.apply(connection,cursor)
+    migrate_sources.apply(connection,cursor)
+    monkeypatch.setattr(check_readiness,'get_connection',store.get_connection)
+    result=check_readiness.check_database()
+    assert result['archive_matches'] and result['source_registry_ready']
+    assert result['season_sources']=={'2024':'api_football'}
+    assert result['counts']['live_matches']=={'total':380,'unique_ids':380}

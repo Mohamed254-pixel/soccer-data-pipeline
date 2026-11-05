@@ -11,6 +11,7 @@ import pandas as pd
 from db import get_connection
 from load_live_matches import prepare_rows as historical_match_rows
 from load_teams import prepare_team_rows, prepare_venue_rows
+import source_ids
 
 
 MATCH_COLUMNS = (
@@ -63,7 +64,7 @@ def require_schema(cursor):
         raise RuntimeError("Phase 2 is disabled. Review and apply migration 003 first.")
 
 
-def extraction_state(seasons, run_id, started_at):
+def extraction_state(seasons, run_id, started_at, provider=source_ids.API):
     with database(write=True) as cursor:
         require_schema(cursor)
         cursor.execute("SELECT * FROM pipeline_control WHERE control_id=1 FOR UPDATE")
@@ -75,6 +76,7 @@ def extraction_state(seasons, run_id, started_at):
         # Claim the entire ETL before contacting the source. This also prevents
         # local extraction from racing an active Airflow run.
         lock_run(cursor, run_id, started_at, claim=True)
+        source_ids.bind_seasons(cursor, seasons, provider, claim=True)
         states = {}
         for season in seasons:
             cursor.execute("SELECT * FROM season_sync_state WHERE season=%s", (season,))
@@ -127,10 +129,13 @@ def load_team_batches(manifest, batches, started_at):
     if sorted(batch["season"] for batch in batches) != sorted(manifest["seasons"]) or 2024 in manifest["seasons"]:
         raise ValueError("Team batches do not match the requested nonhistorical seasons.")
     prepared = []
+    provider = manifest.get("provider", source_ids.API)
     for batch in batches:
         teams = prepare_team_rows(pd.DataFrame(batch["teams"]))
         if len(teams) != 20:
             raise ValueError("Each active season requires 20 team memberships.")
+        for row in teams:
+            source_ids.original_id(provider, row[0], "team")
         venues_frame = pd.DataFrame(batch["venues"], columns=[
             "venue_id", "venue_name", "address", "city", "capacity", "surface", "image_url"
         ])
@@ -141,6 +146,7 @@ def load_team_batches(manifest, batches, started_at):
         prepared.append((batch["season"], teams, venues, batch))
     with database(write=True) as cursor:
         lock_run(cursor, manifest["run_id"], started_at)
+        registered = source_ids.bind_seasons(cursor, manifest["seasons"], provider)
         for season, teams, venues, batch in prepared:
             # Preserve existing canonical metadata, including the complete 2024
             # snapshot. Current descriptions belong in the season snapshots below.
@@ -151,16 +157,27 @@ def load_team_batches(manifest, batches, started_at):
                     ON DUPLICATE KEY UPDATE venue_id=venues.venue_id
                 """, row)
             for row in teams:
-                cursor.execute("SELECT api_team_id FROM teams WHERE team_name=%s AND league=%s", (row[1], row[4]))
+                query = "SELECT api_team_id FROM teams WHERE team_name=%s AND league=%s"
+                params = (row[1], row[4])
+                if registered:
+                    query += " AND source_provider=%s"
+                    params += (provider,)
+                cursor.execute(query, params)
                 collision = cursor.fetchone()
                 if collision and collision["api_team_id"] != row[0]:
                     raise ValueError("Team identity conflicts with an existing unique key.")
-                cursor.execute("""
+                sql = """
                     INSERT INTO teams (api_team_id,team_name,team_code,country,league,stadium,
                                        founded,is_national,logo_url,venue_id)
                     VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                     ON DUPLICATE KEY UPDATE api_team_id=teams.api_team_id
-                """, row)
+                """
+                if registered:
+                    sql = sql.replace("logo_url,venue_id)", "logo_url,venue_id,source_provider)").replace(
+                        "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)", "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)")
+                cursor.execute(sql, row + (provider,) if registered else row)
+                if registered:
+                    source_ids.remember(cursor, provider, row[0], "team")
             venues_by_id = {row["venue_id"]: row for row in batch["venues"]}
             for team in batch["teams"]:
                 cursor.execute("""
@@ -206,7 +223,16 @@ def load_match_batch(manifest, rows, started_at):
         raise ValueError("Match batch contains an unrequested or protected season.")
     with database(write=True) as cursor:
         lock_run(cursor, manifest["run_id"], started_at)
+        provider = manifest.get("provider", source_ids.API)
+        registered = source_ids.bind_seasons(cursor, manifest["seasons"], provider)
+        for row in rows:
+            source_ids.original_id(provider, row[0], "fixture")
+            for value in row[10:12]:
+                source_ids.original_id(provider, value, "team")
         upsert_matches(cursor, rows)
+        if registered:
+            for row in rows:
+                source_ids.remember(cursor, provider, row[0], "fixture", row[6])
 
 
 def assert_historical_snapshot(cursor, root, metadata=True):
@@ -266,8 +292,16 @@ def finish_run(manifest, started_at, root):
             print("Validation/checkpoint commit already completed for this run.")
             return
         lock_run(cursor, manifest["run_id"], started_at)
+        registered = source_ids.bind_seasons(cursor, manifest["seasons"], manifest.get("provider", source_ids.API))
         assert_historical_snapshot(cursor, root)
         validate_seasons(cursor, manifest["seasons"])
+        if registered:
+            for season in manifest["seasons"]:
+                cursor.execute("""SELECT COUNT(*) AS total FROM live_matches m
+                    LEFT JOIN fixture_source_ids f ON f.canonical_id=m.fixture_id AND f.season=m.season
+                    WHERE m.season=%s AND f.canonical_id IS NULL""", (season,))
+                if cursor.fetchone()["total"]:
+                    raise ValueError("Fixture source mapping is incomplete.")
         # Verify staged rows really reached MySQL, including their exact latest
         # values. A process dying after commit can safely retry before this step.
         from incremental import match_rows

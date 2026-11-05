@@ -21,6 +21,7 @@ def offline_environment(monkeypatch):
         "FOOTBALL_SEASONS", "PIPELINE_RUN_ID", "PIPELINE_STAGING_DIR", "PIPELINE_ENV_FILE",
         "INCREMENTAL_OVERLAP_DAYS", "FULL_RECONCILE_DAYS",
         "HISTORICAL_DATA_DIR",
+        "FOOTBALL_SOURCE", "FOOTBALL_DATA_API_KEY",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(requests, "get", Mock(side_effect=AssertionError("Unmocked HTTP request")))

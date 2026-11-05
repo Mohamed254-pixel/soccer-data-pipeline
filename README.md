@@ -10,6 +10,8 @@ See the [engineering review and activation runbook](docs/engineering-review.md) 
 
 The [activation investigation](docs/phase2-activation.md) confirms the current key's Free-plan season restriction and records the private JWT fix, current readiness, and backup/restore verification procedure. No subscription purchase or live ingestion has been performed.
 
+The [football-data.org adapter](docs/football-data-source.md) adds an explicit alternative for 2026–27. It preserves API-FOOTBALL and uses separate source identities; it has not been activated on the application database.
+
 ## Scope and current data
 
 | Dataset | Matches | Teams | Venues |
@@ -77,11 +79,14 @@ Important settings:
 ```dotenv
 FOOTBALL_LEAGUE_ID=39
 FOOTBALL_SEASONS=2026
+FOOTBALL_SOURCE=api_football
 INCREMENTAL_OVERLAP_DAYS=14
 FULL_RECONCILE_DAYS=28
 ```
 
 `2026` means the 2026–27 season. A comma-separated value such as `2025,2026` supports multiple update seasons. `2024` is protected and is rejected as an update season. The older `FOOTBALL_SEASON=2024` setting is retained for legacy snapshot helpers; it does not select the incremental refresh season. Optional `PIPELINE_ENV_FILE` points to a private environment file outside the checkout.
+
+To use the new provider after migration approval, set `FOOTBALL_SOURCE=football_data` and `FOOTBALL_DATA_API_KEY` in the private environment. API-FOOTBALL continues to use `API_KEY`. Tokens are never interchangeable and no automatic provider fallback occurs. Migration 004 registers source-specific IDs after migration 003; review its [schema and activation instructions](docs/football-data-source.md) before applying it. Existing populated seasons cannot be switched automatically between providers.
 
 ### Prepare the existing database
 
@@ -214,6 +219,9 @@ data/*.csv                         # Original 2024 snapshots, unchanged
 data/staging/                      # Ignored run manifests
 tests/                             # Offline tests and opt-in MySQL integration tests
 .github/workflows/tests.yml         # Python 3.11 and MySQL 8.0 CI
+scripts/football_data.py            # football-data.org HTTP adapter and parsing
+scripts/source_ids.py               # Provider namespaces and identity registry
+scripts/migrate_sources.py          # Explicit migration 004 preflight/apply/rollback
 ```
 
 ## Future work

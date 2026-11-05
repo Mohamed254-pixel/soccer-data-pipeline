@@ -188,6 +188,8 @@ def rollback(connection, cursor):
 
 
 def _rollback(connection, cursor):
+    if "source_registry_state" in tables_present(cursor):
+        raise ValueError("Rollback source migration 004 first; do not remove metadata referenced by source mappings.")
     upgraded, future = preflight(cursor)
     tables = tables_present(cursor)
     if not upgraded and not set(SUPPORT_COLUMNS).intersection(tables):
