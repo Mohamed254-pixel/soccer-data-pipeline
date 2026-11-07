@@ -173,6 +173,6 @@ checkpoints, delete history, reset metadata or restore over live data to make a
 check pass. Application writes and destructive recovery require explicit approval.
 
 Sanitized evidence, fingerprints and the metadata backup are retained outside
-Git under `pipeline-private/phase2-schedule-activation`. This documentation update
-is local pending separate publication approval; no push or merge accompanies
-scheduling activation.
+Git under `pipeline-private/phase2-schedule-activation`. This documentation-only
+follow-up records the completed activation. Publishing it does not change
+runtime configuration or trigger another ingestion.
