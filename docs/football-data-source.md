@@ -1,5 +1,7 @@
 # football-data.org source integration
 
+**Current status:** this document retains the original implementation/review record below. PR #7 is now merged. Fernet and administrator access are resolved; 295 tests and fresh restored-copy migration rehearsals pass. No application migrations or ingestion are activated. See the [current preflight and approval gates](phase2-activation-status.md).
+
 ## Design before implementation
 
 Use an explicit `FOOTBALL_SOURCE` selector, defaulting to `api_football` for compatibility. Select `football_data` for new 2026–27 ingestion. Keep all five Airflow tasks and the Monday 06:00 UTC schedule. Do not change migration 003 or apply any migration to the application database in this work.

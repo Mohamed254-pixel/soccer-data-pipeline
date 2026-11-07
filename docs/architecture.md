@@ -1,5 +1,7 @@
 # Premier League Data Engineering Pipeline — Architecture
 
+The implementation is merged; application activation remains pending. The [current preflight](phase2-activation-status.md) distinguishes tested behavior from service startup, migrations and ingestion that still need approval. The private intended runtime selects football-data.org for season 2026; the code retains API-FOOTBALL as its compatibility default.
+
 ## Scope
 
 Phase 2 extends the existing five-stage pipeline with incremental fixture updates and explicit season identity. It preserves the committed 2024–25 snapshot and defaults to refreshing 2026–27. API season identifiers are starting years; multiple update seasons are configurable. League 39 is enforced.
@@ -69,7 +71,7 @@ The final transaction compares all original match/team/venue values with the tru
 
 Existing services and database architecture are retained: Airflow in Docker, PostgreSQL metadata, Redis messaging, and MySQL on the Mac host. The `soccer-data` volume is retained. A separate read-only bind mount makes the committed archive visible under `/opt/soccer/historical-data`, independently of the staging volume. `HISTORICAL_DATA_DIR` selects that reference in containers.
 
-The DAG must be unpaused and scheduler/workers must remain running for automatic updates. This PR does not deploy a production service. Migration 003 must be reviewed and applied separately before activating the new ETL; runtime code contains no DDL.
+The DAG must be unpaused and scheduler/workers must remain running for automatic updates. Migrations 003 and 004 must be reviewed and applied separately for football-data.org; runtime code contains no DDL. Keep the original Compose project name `soccer-data-pipeline` to retain metadata/staging volumes across checkout renames. The Mac must stay awake with Docker Desktop and MySQL running; this is not an always-on cloud service.
 
 ## Verification and limitations
 
