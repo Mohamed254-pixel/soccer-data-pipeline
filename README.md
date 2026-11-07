@@ -6,22 +6,22 @@ The project preserves its **2024–25 archive** and supports weekly updates for 
 
 [Repository](https://github.com/Mohamed254-pixel/premier-league-data-pipeline) · [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Migration and recovery](docs/phase2-migrations.md)
 
-**Activation status:** Phase 2 is merged into `main`, but is not activated. The latest [activation preflight](docs/phase2-activation-status.md) records 295 passing tests, a fresh restore-tested database backup, successful migration rehearsals on an isolated copy, and verified season-2026 API access. Application migrations, live ingestion, service startup, and scheduling still require separate approvals.
+**Verified status — 7 November 2026 UTC:** migrations **003/004**, [service startup](docs/phase2-service-startup.md), [real bootstrap](docs/phase2-bootstrap-results.md) and [one incremental repeat](docs/phase2-repeat-results.md) passed. MySQL holds **380 archived 2024 fixtures plus 380 season-2026 fixtures** (91 completed, 289 scheduled). The repeat rechecked 36 fixtures without adding duplicates or changing fixture values. All seven persistent services are healthy, and 295 tests pass. **Weekly scheduling remains disabled: the DAG is paused.** Scheduling and publication require separate approval; Phase 2 is not fully complete yet.
 
-The earlier [engineering review](docs/engineering-review.md) and [activation investigation](docs/phase2-activation.md) remain dated investigation records. Their original Fernet and administrator-access blockers are resolved; the API-FOOTBALL Free-plan restriction is avoided by selecting the separately authorized football-data.org source. No subscription purchase or live ingestion has been performed.
+The earlier [engineering review](docs/engineering-review.md) and [activation investigation](docs/phase2-activation.md) remain dated records. Their Fernet and administrator-access blockers are resolved. The historical API-FOOTBALL Free-plan restriction is avoided by selecting the authorized football-data.org source. Both real runs used existing credentials; no subscription purchase or credential disclosure was involved.
 
-The [football-data.org adapter](docs/football-data-source.md) adds an explicit alternative for 2026–27. It preserves API-FOOTBALL and uses separate source identities; it has not been activated on the application database.
+The [football-data.org adapter](docs/football-data-source.md) supplies 2026–27 while preserving API-FOOTBALL and separate provider identities. The supervised bootstrap used the existing runner inside the worker container; no Airflow DAG run or automatic schedule was triggered.
 
 ## Scope and current data
 
 | Dataset | Matches | Teams | Venues |
 | --- | ---: | ---: | ---: |
 | Committed 2024–25 archive | 380 | 20 | 20 |
-| Configured 2026–27 season | 0 ingested so far | 20 memberships expected after activation | Source-dependent |
+| Loaded 2026–27 season | 380 fixtures: 91 completed, 289 scheduled | 20 memberships | No stable venue IDs supplied |
 
 The three original CSVs under `data/` remain unchanged. Phase 2 stages new batches under ignored `data/staging/`, not in the archive files. Existing canonical team and venue records remain unchanged; current descriptions are stored in season snapshots. Global team/venue counts can grow as clubs change between seasons.
 
-Phase 1 was merged in PR #5; Phase 2 PRs #6 and #7 are merged. The existing repository was renamed without losing its history. Applying migrations 003 and 004 and enabling Airflow are explicit operational steps. Passing isolated integration tests does not mean live 2026–27 data has been imported.
+Phase 1 was merged in PR #5; Phase 2 PRs #6 and #7 are merged. The repository was renamed without losing history. Migrations, service startup, bootstrap and a production incremental repeat were separately approved and verified. Enabling the weekly schedule remains an explicit operational gate. These local runs used the five-stage runner inside the worker container; they were not Airflow DAG task runs.
 
 ## Architecture
 
@@ -55,13 +55,15 @@ Airflow uses `schedule="0 6 * * 1"`, UTC, `catchup=False`, two retries five minu
 4. Reconcile the configured season in full every 28 days by default. This catches moved fixtures and older corrections that a date filter cannot reveal. The archived 2024 season is never automatically re-downloaded.
 5. Commit checkpoints only after the final quality step succeeds. A valid empty incremental window is a no-op; an empty bootstrap, API error, malformed response, or incomplete ID lookup fails the run.
 
+Idempotency preserves fixture identities and business values. Reobserved fixtures receive a newer `source_observed_at`, and a successful incremental run advances `last_success_at` even if dates, teams, scores and statuses are unchanged. `last_full_sync_at` advances only for a full reconciliation. The real repeat verified zero business-value changes and 36 observation-only updates; it was not a claim of zero SQL writes.
+
 Full reconciliation must include every previously stored fixture ID for that season. Missing results fail before publishing the batch. Transport failures and transient HTTP errors retry up to three attempts with bounded backoff; authentication, subscription, and malformed-data failures require intervention or a later task retry.
 
 This is a weekly refresh, not a real-time scores service. Live scores/statuses are captured when a run polls them. Older corrections may wait until the next full active-season reconciliation. See the [API-FOOTBALL fixtures contract](https://www.api-football.com/documentation_v3).
 
 ## Local setup
 
-Use Python 3.11+ and MySQL 8.0+. Docker Desktop is needed for Airflow, but not for offline tests or the local runner.
+Use Python 3.11+ and MySQL 8.0.16+ for enforced CHECK constraints. Docker Desktop is needed for Airflow, but not for offline tests or the local runner. Local verification used MySQL 9.3.0; CI uses MySQL 8.0.
 
 ```bash
 git clone https://github.com/Mohamed254-pixel/premier-league-data-pipeline.git
@@ -120,6 +122,16 @@ python run_pipeline.py
 
 Every step logs its start, success/failure, and duration. Any failure stops downstream steps and exits nonzero. The runner prints a run ID for recovery. Original archive CSVs remain unchanged.
 
+With the existing stack configured, the equivalent container command uses its application credentials and shared staging volume:
+
+```bash
+# Write-capable: requires approval in this deployment.
+docker compose --project-name soccer-data-pipeline --env-file /private/path/runtime.env \
+  exec -T airflow-worker python /opt/soccer/run_pipeline.py
+```
+
+Keep the DAG paused for supervised runner execution. Do not manually trigger a paused DAG expecting scheduler execution. A healthy service stack and two successful runner invocations do not prove a future scheduled DAG run has executed.
+
 ## Docker and Airflow
 
 The existing private `FERNET_KEY` and independent `AIRFLOW__API_AUTH__JWT_SECRET` are validated. Preserve them and the original metadata backups. For a new installation only, generate the Fernet key with `cryptography.fernet.Fernet.generate_key()` and an independent JWT secret with `secrets.token_urlsafe(48)`, writing directly to a protected private file rather than printing them. Existing encrypted metadata requires a separately reviewed key-recovery/rotation procedure. Compose refuses missing keys; UI ports bind to loopback. This stack retains local development metadata credentials and requires further access/security configuration before hosting publicly.
@@ -137,16 +149,21 @@ Use the existing Compose project name to preserve the original metadata and stag
 ```bash
 export COMPOSE_PROJECT_NAME=soccer-data-pipeline
 export ENV_FILE_PATH=/private/path/runtime.env
-export AIRFLOW_PROJ_DIR="$PWD"
+export AIRFLOW_PROJ_DIR=/path/to/existing/runtime-checkout
 docker compose --env-file "$ENV_FILE_PATH" config --quiet
 ```
 
-**After separate service-start approval**, start Docker Desktop and build/start the reviewed stack. `airflow-init` performs Airflow metadata migrations and user setup; inspect the existing metadata/version and include those effects in the approval. Never reset metadata or volumes. Confirm the saved DAG is paused and no work is queued before starting scheduler/workers:
+Point `AIRFLOW_PROJ_DIR` at the existing checkout whose config, logs and plugins must be preserved; verify its runtime source matches the reviewed code. A worktree may lack those ignored directories. **After service-start approval**, start Docker Desktop and build/start the stack in stages. Verify original metadata is current, the DAG is paused, and no active or queued work exists before scheduler/worker startup. Never reset metadata or volumes.
+
+For this existing environment, metadata and user setup are already current, so `airflow-init` was deliberately skipped. That one-shot service performs metadata migrations/user setup and is not a sixth persistent Airflow process. Initialization of a new or outdated environment requires separate review and approval. The verified existing-environment sequence is:
 
 ```bash
 docker compose --env-file "$ENV_FILE_PATH" build
-docker compose --env-file "$ENV_FILE_PATH" up airflow-init
-docker compose --env-file "$ENV_FILE_PATH" up -d
+docker compose --env-file "$ENV_FILE_PATH" up -d --no-deps postgres redis
+# Verify metadata version, paused DAG, empty task/run state and broker first.
+docker compose --env-file "$ENV_FILE_PATH" up -d --no-deps airflow-apiserver airflow-dag-processor airflow-triggerer
+# Verify prerequisite health, paused DAG and empty queues again.
+docker compose --env-file "$ENV_FILE_PATH" up -d --no-deps airflow-scheduler airflow-worker
 docker compose --env-file "$ENV_FILE_PATH" ps
 docker compose --env-file "$ENV_FILE_PATH" exec airflow-scheduler airflow dags list-import-errors
 ```
@@ -162,11 +179,26 @@ Check tasks and runs:
 ```bash
 docker compose --env-file "$ENV_FILE_PATH" exec airflow-scheduler airflow tasks list premier_league_etl
 docker compose --env-file "$ENV_FILE_PATH" exec airflow-scheduler airflow dags list-runs premier_league_etl
+docker compose --env-file "$ENV_FILE_PATH" logs --tail 100 airflow-scheduler airflow-worker airflow-dag-processor
 ```
 
 The Mac must remain powered on and awake, with Docker Desktop, MySQL, scheduler, and workers running. This is a local deployment, not an always-on cloud service. Airflow tasks use the same run ID across all five stages. MySQL remains on the Mac host via `host.docker.internal`; PostgreSQL/Redis serve Airflow only. The existing named data volume is retained for staging. A separate read-only mount exposes the committed archive at `/opt/soccer/historical-data`, so an empty staging volume cannot hide it.
 
 `docker compose down` stops the services while retaining volumes. Do not remove named volumes as part of routine operation.
+
+Before stopping, confirm no run owns `pipeline_control`. Restart with the staged existing-metadata commands above, preserving project name, keys, mounts and pause state. Do not use service restart as a reason to rerun ETL or release a pending owner automatically.
+
+For MySQL Workbench, use the existing private connection and query by `season`, not the global table count:
+
+```sql
+SELECT season, COUNT(*) AS fixtures FROM live_matches GROUP BY season;
+SELECT season, status_short, COUNT(*) AS fixtures
+FROM live_matches GROUP BY season, status_short;
+SELECT season, COUNT(*) AS teams FROM season_teams GROUP BY season;
+SELECT * FROM season_sync_state;
+```
+
+Backups stay outside Git with restrictive permissions. Use a new timestamped filename, a consistent InnoDB snapshot, checksum verification and restoration on an isolated compatible server. The [pre-repeat backup](docs/phase2-repeat-results.md) includes all 15 tables and both seasons. Never restore over the application database or remove source data to force a migration rollback without a separately approved recovery plan.
 
 ## Validation and tests
 

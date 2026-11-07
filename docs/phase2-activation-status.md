@@ -1,5 +1,7 @@
 # Phase 2 activation preflight
 
+**Approved follow-up:** migrations 003/004, [service startup](phase2-service-startup.md), [real bootstrap](phase2-bootstrap-results.md) and [one incremental repeat](phase2-repeat-results.md) have since succeeded. The DAG remains paused; scheduling awaits approval. The preflight record below describes the state before those approved changes.
+
 Verified 7 November 2026 UTC (6 November Pacific), against GitHub `main`
 `fde57c074b85f6516929dd039bb33c9c505de94a`. Local preparation branch:
 `feature/phase2-activation-preflight`. This record supersedes deployment-status

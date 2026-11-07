@@ -1,6 +1,6 @@
 # football-data.org source integration
 
-**Current status:** this document retains the original implementation/review record below. PR #7 is now merged. Fernet and administrator access are resolved; 295 tests and fresh restored-copy migration rehearsals pass. No application migrations or ingestion are activated. See the [current preflight and approval gates](phase2-activation-status.md).
+**Current status:** this document retains the dated implementation/review record below. PR #7, migrations 003/004, healthy local services, [real bootstrap](phase2-bootstrap-results.md) and [one incremental repeat](phase2-repeat-results.md) are verified. Both seasons retain 380 fixtures and all 295 tests pass. The DAG remains paused; enabling weekly scheduling requires approval.
 
 ## Design before implementation
 

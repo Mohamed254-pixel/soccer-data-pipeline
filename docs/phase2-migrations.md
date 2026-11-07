@@ -1,6 +1,6 @@
 # Phase 2 — migration, activation, and recovery
 
-See the [current preflight and approval scope](phase2-activation-status.md) for executed checks. The application database still awaits migration approval. football-data.org requires **003 followed by 004**; the [source-registry guide](football-data-source.md) describes 004. Never run either migration automatically during ETL or service startup.
+See the [preflight and approval scope](phase2-activation-status.md) and the [successful application migration results](phase2-migration-results.md). football-data.org requires **003 followed by 004**; both are now applied to the existing application database. The [source-registry guide](football-data-source.md) describes 004. Do not reinitialize the database or run migrations automatically during ETL/service startup.
 
 ## Scope and preflight
 

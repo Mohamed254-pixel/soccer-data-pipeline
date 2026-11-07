@@ -1,6 +1,6 @@
 # Premier League Data Engineering Pipeline — Architecture
 
-The implementation is merged; application activation remains pending. The [current preflight](phase2-activation-status.md) distinguishes tested behavior from service startup, migrations and ingestion that still need approval. The private intended runtime selects football-data.org for season 2026; the code retains API-FOOTBALL as its compatibility default.
+The merged implementation has verified migrations, healthy local services, a real season-2026 bootstrap and [one successful incremental repeat](phase2-repeat-results.md). The DAG remains paused; weekly scheduling is pending approval. The runtime selects football-data.org for season 2026, while the code retains API-FOOTBALL as its compatibility default. Both supervised runs used the deployed runner, not Airflow DAG task execution.
 
 ## Scope
 
@@ -62,6 +62,8 @@ Canonical team and venue rows are inserted only when new; existing descriptions 
 ## Run ownership, transactions, and checkpoints
 
 `pipeline_control` has one run-owner row. Extraction claims it in a short transaction before making API calls. Every write stage must own it, and stale staging cannot run after a newer completed run. This prevents local execution racing an Airflow run, including races while requests are in progress. Database row locks serialize owner changes; no connection is held across Airflow tasks.
+
+An unchanged source response still refreshes observation metadata for returned fixtures. The real incremental repeat returned 36 existing fixtures: business fields stayed identical, their `source_observed_at` advanced, and the other 724 fixture rows remained identical. This is identity/value idempotency, not a promise of zero database writes. Full-reconciliation time remained unchanged while the successful incremental checkpoint advanced.
 
 Teams/venues and matches each commit their own transaction. A failed batch rolls back that transaction and propagates the error. A later quality failure does not undo an earlier loader commit. Instead, the pending owner stays in place and no success checkpoint advances.
 
