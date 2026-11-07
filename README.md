@@ -6,11 +6,11 @@ The project preserves its **2024–25 archive** and supports weekly updates for 
 
 [Repository](https://github.com/Mohamed254-pixel/premier-league-data-pipeline) · [Architecture](docs/architecture.md) · [Data model](docs/data-model.md) · [Migration and recovery](docs/phase2-migrations.md)
 
-**Verified status — 7 November 2026 UTC:** migrations **003/004**, [service startup](docs/phase2-service-startup.md), [real bootstrap](docs/phase2-bootstrap-results.md) and [one incremental repeat](docs/phase2-repeat-results.md) passed. MySQL holds **380 archived 2024 fixtures plus 380 season-2026 fixtures** (91 completed, 289 scheduled). The repeat rechecked 36 fixtures without adding duplicates or changing fixture values. All seven persistent services are healthy, and 295 tests pass. **Weekly scheduling remains disabled: the DAG is paused.** Scheduling and publication require separate approval; Phase 2 is not fully complete yet.
+**Verified status — 7 November 2026 UTC:** **Phase 2 is operational locally.** Migrations **003/004**, [service startup](docs/phase2-service-startup.md), [real bootstrap](docs/phase2-bootstrap-results.md), [incremental repeat](docs/phase2-repeat-results.md) and [approved scheduling activation](docs/phase2-scheduling-results.md) passed. MySQL holds **380 archived 2024 fixtures plus 380 season-2026 fixtures** (91 completed, 289 scheduled). The first scheduler-created run passed all five tasks on their first attempts, rechecking 36 fixtures without duplicates or business-value changes. All seven persistent services are healthy; merged-main CI passed the full 295-test integration suite. The DAG is **enabled**, with the next scheduled run verified as **9 November 2026, 06:00 UTC**. That future run has not executed yet.
 
-The earlier [engineering review](docs/engineering-review.md) and [activation investigation](docs/phase2-activation.md) remain dated records. Their Fernet and administrator-access blockers are resolved. The historical API-FOOTBALL Free-plan restriction is avoided by selecting the authorized football-data.org source. Both real runs used existing credentials; no subscription purchase or credential disclosure was involved.
+The earlier [engineering review](docs/engineering-review.md) and [activation investigation](docs/phase2-activation.md) remain dated records. Their Fernet and administrator-access blockers are resolved. The historical API-FOOTBALL Free-plan restriction is avoided by selecting the authorized football-data.org source. All real runs used existing credentials; no subscription purchase or credential disclosure was involved.
 
-The [football-data.org adapter](docs/football-data-source.md) supplies 2026–27 while preserving API-FOOTBALL and separate provider identities. The supervised bootstrap used the existing runner inside the worker container; no Airflow DAG run or automatic schedule was triggered.
+The [football-data.org adapter](docs/football-data-source.md) supplies 2026–27 while preserving API-FOOTBALL and separate provider identities. The supervised bootstrap and repeat used the existing runner inside the worker container. Separately approved scheduling activation then completed a real Airflow DAG run through all five tasks.
 
 ## Scope and current data
 
@@ -21,7 +21,7 @@ The [football-data.org adapter](docs/football-data-source.md) supplies 2026–27
 
 The three original CSVs under `data/` remain unchanged. Phase 2 stages new batches under ignored `data/staging/`, not in the archive files. Existing canonical team and venue records remain unchanged; current descriptions are stored in season snapshots. Global team/venue counts can grow as clubs change between seasons.
 
-Phase 1 was merged in PR #5; Phase 2 PRs #6 and #7 are merged. The repository was renamed without losing history. Migrations, service startup, bootstrap and a production incremental repeat were separately approved and verified. Enabling the weekly schedule remains an explicit operational gate. These local runs used the five-stage runner inside the worker container; they were not Airflow DAG task runs.
+Phase 1 was merged in PR #5; Phase 2 PRs #6, #7 and #8 are merged. The repository was renamed without losing history. Migrations, service startup, bootstrap, repeat-run testing and weekly scheduling were separately approved and verified. Main commit `381747c` is the activated code version. This is a Mac-hosted deployment: MySQL, Docker Desktop and the Airflow services must stay running, and the Mac must remain awake.
 
 ## Architecture
 
@@ -130,7 +130,7 @@ docker compose --project-name soccer-data-pipeline --env-file /private/path/runt
   exec -T airflow-worker python /opt/soccer/run_pipeline.py
 ```
 
-Keep the DAG paused for supervised runner execution. Do not manually trigger a paused DAG expecting scheduler execution. A healthy service stack and two successful runner invocations do not prove a future scheduled DAG run has executed.
+Pause the enabled DAG and verify no active tasks or pending pipeline owner before an approved supervised runner execution. Do not manually trigger a paused DAG expecting scheduler execution. The initial scheduler-created run has now passed; subsequent weekly runs still need monitoring.
 
 ## Docker and Airflow
 

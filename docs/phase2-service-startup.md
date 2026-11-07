@@ -1,6 +1,6 @@
 # Approved staged Docker and Airflow startup
 
-**Subsequent approved step:** [one supervised bootstrap](phase2-bootstrap-results.md) has now loaded and validated 380 season-2026 fixtures. The startup record below predates ingestion. The DAG remains paused; production repeat-run testing and scheduling still await approval.
+**Subsequent approved steps:** the [bootstrap](phase2-bootstrap-results.md), [incremental repeat](phase2-repeat-results.md) and [weekly scheduling activation](phase2-scheduling-results.md) have succeeded. The DAG is enabled and its first scheduler-created run passed. The startup record below predates those separate approvals and operations.
 
 Verified 7 November 2026 UTC (6 November Pacific). Approval covered service
 startup and read-only verification only. No DAG trigger, ETL run, scheduling,

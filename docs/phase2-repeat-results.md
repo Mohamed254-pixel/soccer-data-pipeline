@@ -1,5 +1,7 @@
 # Approved incremental repeat and publication readiness
 
+**Subsequent approved steps:** PR #8 was merged as `381747c`; [weekly scheduling activation](phase2-scheduling-results.md) then succeeded, including one real scheduler-created run. The DAG is now enabled. The record below describes the earlier repeat-run and publication preparation.
+
 Verified 7 November 2026 UTC (6 November Pacific). This was **one** separately
 approved production repeat, using the existing five-stage runner inside the
 worker container and the application account. It was not a full bootstrap,
