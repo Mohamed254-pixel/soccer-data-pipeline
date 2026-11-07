@@ -1,5 +1,7 @@
 # Premier League Data Engineering Pipeline — Architecture
 
+The merged implementation has verified migrations, healthy local services, a real season-2026 bootstrap and [one successful incremental repeat](phase2-repeat-results.md). The DAG remains paused; weekly scheduling is pending approval. The runtime selects football-data.org for season 2026, while the code retains API-FOOTBALL as its compatibility default. Both supervised runs used the deployed runner, not Airflow DAG task execution.
+
 ## Scope
 
 Phase 2 extends the existing five-stage pipeline with incremental fixture updates and explicit season identity. It preserves the committed 2024–25 snapshot and defaults to refreshing 2026–27. API season identifiers are starting years; multiple update seasons are configurable. League 39 is enforced.
@@ -61,6 +63,8 @@ Canonical team and venue rows are inserted only when new; existing descriptions 
 
 `pipeline_control` has one run-owner row. Extraction claims it in a short transaction before making API calls. Every write stage must own it, and stale staging cannot run after a newer completed run. This prevents local execution racing an Airflow run, including races while requests are in progress. Database row locks serialize owner changes; no connection is held across Airflow tasks.
 
+An unchanged source response still refreshes observation metadata for returned fixtures. The real incremental repeat returned 36 existing fixtures: business fields stayed identical, their `source_observed_at` advanced, and the other 724 fixture rows remained identical. This is identity/value idempotency, not a promise of zero database writes. Full-reconciliation time remained unchanged while the successful incremental checkpoint advanced.
+
 Teams/venues and matches each commit their own transaction. A failed batch rolls back that transaction and propagates the error. A later quality failure does not undo an earlier loader commit. Instead, the pending owner stays in place and no success checkpoint advances.
 
 The final transaction compares all original match/team/venue values with the trusted CSV archive; validates season counts, status data, memberships, and every staged fixture's loaded values; updates each `season_sync_state`; and releases the owner. Reconciliation time advances only when a full reconciliation passed. The owner has a six-hour lease renewed by write stages. Only fresh extraction can replace an expired owner; old workers fail subsequent ownership checks. This allows later scheduled runs to recover from dead processes. A failed run can also be resumed by its original ID. An explicit release operation exists for abandoned runs and retains all rows and previous checkpoints.
@@ -69,7 +73,7 @@ The final transaction compares all original match/team/venue values with the tru
 
 Existing services and database architecture are retained: Airflow in Docker, PostgreSQL metadata, Redis messaging, and MySQL on the Mac host. The `soccer-data` volume is retained. A separate read-only bind mount makes the committed archive visible under `/opt/soccer/historical-data`, independently of the staging volume. `HISTORICAL_DATA_DIR` selects that reference in containers.
 
-The DAG must be unpaused and scheduler/workers must remain running for automatic updates. This PR does not deploy a production service. Migration 003 must be reviewed and applied separately before activating the new ETL; runtime code contains no DDL.
+The DAG must be unpaused and scheduler/workers must remain running for automatic updates. Migrations 003 and 004 must be reviewed and applied separately for football-data.org; runtime code contains no DDL. Keep the original Compose project name `soccer-data-pipeline` to retain metadata/staging volumes across checkout renames. The Mac must stay awake with Docker Desktop and MySQL running; this is not an always-on cloud service.
 
 ## Verification and limitations
 

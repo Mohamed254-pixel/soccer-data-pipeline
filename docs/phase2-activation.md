@@ -1,5 +1,7 @@
 # Phase 2 activation investigation
 
+**Current status:** this is a dated investigation. See the [final activation preflight](phase2-activation-status.md) for current access, backup, migration rehearsals and approval gates. PRs #6 and #7 are merged; application activation remains pending.
+
 Follow-up to review commit `bc493b9`, 4 November 2026 (Pacific time), on `feature/phase2-incremental-etl`. This report supersedes the earlier review's JWT/configuration blocker. PR [#6](https://github.com/Mohamed254-pixel/premier-league-data-pipeline/pull/6) remains subject to owner approval and must not be merged automatically.
 
 ## API access: blocked by the account plan

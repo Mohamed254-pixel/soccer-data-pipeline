@@ -1,5 +1,7 @@
 # Phase 2 engineering review and activation runbook
 
+**Current status:** this is a dated investigation. See the [final activation preflight](phase2-activation-status.md) for current access, backup, migration rehearsals and approval gates. PRs #6 and #7 are merged; application activation remains pending.
+
 **Activation follow-up:** [phase2-activation.md](phase2-activation.md) records the subsequent API investigation and private JWT fix. The Free-plan restriction is now confirmed; the JWT blocker is resolved and private Compose configuration passes. The original review results below remain a record of the earlier check, not current configuration status.
 
 Reviewed 4 November 2026 (Pacific time), on `feature/phase2-incremental-etl`, PR [#6](https://github.com/Mohamed254-pixel/premier-league-data-pipeline/pull/6). Review scope covered repository source, the complete PR changes, schemas/migrations, API and SQL boundaries, tests, DAG, Compose, CI, environment handling, and recovery documentation. No Phase 3 work is included.

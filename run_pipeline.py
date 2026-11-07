@@ -40,12 +40,12 @@ def main():
 def run_pipeline():
     LOGGER.info("Run ID: %s", os.environ["PIPELINE_RUN_ID"])
     run_step(
-        "Step 1: Pulling match data from API-FOOTBALL...",
+        "Step 1: Extracting match data...",
         PROJECT_ROOT / "scripts" / "api_matches.py",
     )
 
     run_step(
-        "Step 2: Pulling team and venue data from API-FOOTBALL...",
+        "Step 2: Extracting teams and venues...",
         PROJECT_ROOT / "scripts" / "api_teams.py",
     )
 

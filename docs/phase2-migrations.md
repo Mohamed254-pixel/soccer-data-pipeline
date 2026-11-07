@@ -1,5 +1,7 @@
 # Phase 2 — migration, activation, and recovery
 
+See the [preflight and approval scope](phase2-activation-status.md) and the [successful application migration results](phase2-migration-results.md). football-data.org requires **003 followed by 004**; both are now applied to the existing application database. The [source-registry guide](football-data-source.md) describes 004. Do not reinitialize the database or run migrations automatically during ETL/service startup.
+
 ## Scope and preflight
 
 Migration 003 upgrades the existing Phase 1 database. It never drops the original three tables or deletes fixture rows. The original `sql/schema.sql` and migrations 001/002 remain unchanged. Do not reapply old migrations to an already migrated database.
@@ -28,7 +30,7 @@ The named SQL steps:
 2. Add nullable season/status/source-ID/observation metadata to matches, a season/status/date index, and membership foreign keys. Widen `match_date` to nullable DATETIME(6) to retain unknown/fractional kickoff timestamps; original dates remain unchanged.
 3. Snapshot the verified historical memberships and team/venue descriptions.
 4. Backfill only the verified legacy dataset with season 2024, finished status, and team source IDs. All original six fixture fields remain unchanged.
-5. Verify all metadata was backfilled and historical values still match, then enable Phase 2.
+5. Verify all metadata was backfilled and historical values still match, then set the database control's `enabled=TRUE`. This does not start ETL, unpause Airflow, or authorize ingestion.
 
 Each named up step can be resumed. The match metadata ALTER is one atomic statement; on a retry it is skipped only when the full expected metadata column set is present. Incomplete/unexpected column sets fail for inspection. Reapplying an already enabled migration verifies the protected snapshot and performs no further writes.
 
@@ -40,7 +42,7 @@ MySQL DDL commits implicitly. This is **not** a transaction wrapping the entire 
 
 ## Rollback before ingestion
 
-Only before any incremental writes, the guarded down migration can restore the original schema:
+Only before any incremental writes, and after separate rollback approval, the guarded down migration can restore the original schema. If 004 exists, roll it back first through `scripts/migrate_sources.py --rollback`; 003 refuses while the registry remains:
 
 ```bash
 PIPELINE_ENV_FILE=/private/path/admin.env python scripts/migrate_phase2.py --rollback
@@ -54,12 +56,14 @@ An interrupted rollback can be resumed even when its metadata ALTER committed bu
 
 ## Activate weekly updates
 
-After migration review/application:
+These are separate approval gates, not a single activation command:
 
-1. Set `FOOTBALL_SEASONS=2026` in the private runtime configuration. A comma-separated list supports additional seasons except the protected archive.
+1. Set `FOOTBALL_SEASONS=2026` and `FOOTBALL_SOURCE=football_data` in private runtime configuration for the approved provider. Keep its token separate from the original API-FOOTBALL key. Apply 003 and then 004 only after migration approval.
 2. Confirm the API account has access to the requested league/season and sufficient quota. A key being present is not a coverage guarantee. No real refresh is needed to run the automated tests.
-3. Run `python run_pipeline.py`, inspect all five stages, then inspect season counts/statuses/checkpoints. The first refresh bootstraps the configured season; later ones are incremental.
-4. Start healthy Airflow services and unpause `premier_league_etl`. Scheduling remains Monday 06:00 UTC. Keep scheduler/workers running.
+3. After service-start approval, bring up the existing Compose project with the DAG paused, preserving metadata and storage. Verify no queued work before starting scheduler/workers.
+4. After first-ingestion approval, run `python run_pipeline.py` or trigger one supervised DAG run; inspect all five stages and season counts/statuses/checkpoints. Bootstrap the full available season, not just the readiness sample.
+5. Obtain separate approval for a repeat write-capable run and verify idempotency, UPSERTs, mappings and the unchanged archive.
+6. After scheduling approval, unpause `premier_league_etl` and verify its actual next execution. Scheduling remains Monday 06:00 UTC. The Mac must stay awake with MySQL, Docker Desktop, scheduler and workers running.
 
 Original CSVs stay unchanged. Container validation reads the read-only archive mount separately from the existing named staging volume. The stage scripts perform no DDL, and no schema migration is triggered by an Airflow retry.
 

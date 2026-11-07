@@ -1,5 +1,7 @@
 # football-data.org source integration
 
+**Current status:** this document retains the dated implementation/review record below. PR #7, migrations 003/004, healthy local services, [real bootstrap](phase2-bootstrap-results.md) and [one incremental repeat](phase2-repeat-results.md) are verified. Both seasons retain 380 fixtures and all 295 tests pass. The DAG remains paused; enabling weekly scheduling requires approval.
+
 ## Design before implementation
 
 Use an explicit `FOOTBALL_SOURCE` selector, defaulting to `api_football` for compatibility. Select `football_data` for new 2026–27 ingestion. Keep all five Airflow tasks and the Monday 06:00 UTC schedule. Do not change migration 003 or apply any migration to the application database in this work.

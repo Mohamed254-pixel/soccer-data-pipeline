@@ -53,7 +53,7 @@ Existing columns retain their meanings:
 
 | Column | Type after migration | Meaning |
 | --- | --- | --- |
-| `fixture_id` | BIGINT UNSIGNED, primary key | Stable source identity across corrections and postponements |
+| `fixture_id` | BIGINT UNSIGNED, primary key | Canonical fixture identity; raw provider ID is in `fixture_source_ids.source_id` |
 | `match_date` | DATETIME(6), nullable | UTC kickoff, without timezone offset; nullable for TBD/PST |
 | `home_team`, `away_team` | VARCHAR(100), required | Source team-name snapshots |
 | `home_goals`, `away_goals` | SMALLINT UNSIGNED, nullable | Null before scores are known; never fabricate zero |
@@ -66,7 +66,7 @@ Added metadata:
 | `status_short` | VARCHAR(5) | API status code |
 | `status_long` | VARCHAR(100) | Human-readable source status |
 | `elapsed` | SMALLINT UNSIGNED, nullable | Source elapsed match time |
-| `home_api_team_id`, `away_api_team_id` | INT UNSIGNED, nullable for migration compatibility | Source team IDs; required by new writes |
+| `home_api_team_id`, `away_api_team_id` | INT UNSIGNED, nullable for migration compatibility | Canonical provider-namespaced team IDs; required by new writes |
 | `source_observed_at` | DATETIME(6), nullable for backfilled archive | UTC batch observation time, not an API updated-at timestamp |
 
 The existing primary key, date/home/away unique key, and indexes are retained. A season/status/date index supports unresolved-fixture selection. Two foreign keys reference `(season, api_team_id)` in `season_teams`. The loader guards alternate-key collisions before UPSERT and never changes an existing fixture's season identity. A full load is not a replacement/delete operation.
@@ -75,7 +75,7 @@ Scheduled/live/postponed/abandoned/cancelled/technical outcomes retain appropria
 
 ## `teams` and `venues`
 
-The original schema in `sql/schema.sql` is unchanged. `teams.team_id` is an internal surrogate key; `api_team_id` is the unique source identifier. `teams.venue_id` still references `venues.venue_id`. These original rows preserve the historical canonical descriptions.
+The original schema in `sql/schema.sql` is unchanged. `teams.team_id` is an internal surrogate key; `api_team_id` is the unique canonical provider-namespaced identity after 004. Its raw ID is recorded in `team_source_ids`. `teams.venue_id` still references `venues.venue_id`. These original rows preserve historical canonical descriptions.
 
 Phase 2 inserts previously unseen source IDs without overwriting existing descriptions. Global table counts can exceed 20 as seasons introduce new clubs and venues. Current-season descriptions must be read from `season_teams`, rather than assuming canonical rows describe every later season.
 
