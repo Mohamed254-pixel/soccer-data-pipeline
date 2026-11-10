@@ -1,0 +1,18 @@
+# Deny by default: never send private env, Git history, backups or local staging to the builder.
+**
+!Dockerfile
+!requirements-airflow.txt
+!requirements-aws.txt
+!scripts/
+!scripts/*.py
+!dags/
+!dags/*.py
+!data/
+!data/live_matches.csv
+!data/teams.csv
+!data/venues.csv
+!deploy/
+!deploy/aws/
+!deploy/aws/Dockerfile
+!deploy/aws/certs/
+!deploy/aws/certs/global-bundle.pem

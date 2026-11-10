@@ -226,3 +226,13 @@ config/airflow.cfg
 
 # Run-scoped incremental staging (the committed 2024 snapshots stay tracked)
 data/staging/
+
+# AWS deployment artifacts and private inputs
+.aws/
+.aws-sam/
+*.tfstate
+*.tfstate.*
+*.tfplan
+deploy/aws/certs/
+deploy/aws/*.private.json
+deploy/aws/*.private.env

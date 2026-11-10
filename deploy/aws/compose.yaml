@@ -1,0 +1,144 @@
+# Separate cloud stack. Never combine with the running Mac Compose project.
+name: premier-league-cloud
+x-airflow-common: &airflow-common
+  image: ${PIPELINE_IMAGE:?Set the reviewed immutable image tag}
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW_METADATA_URI:?Set the encoded metadata URI privately}
+    AIRFLOW__CELERY__RESULT_BACKEND: ${AIRFLOW_RESULT_URI:?Set the encoded result URI privately}
+    AIRFLOW__CELERY__BROKER_URL: ${AIRFLOW_BROKER_URI:?Set the encoded broker URI privately}
+    AIRFLOW__CORE__FERNET_KEY: ${FERNET_KEY:?Set a private Fernet key}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:?Set an independent JWT secret}
+    AIRFLOW__API_AUTH__JWT_ISSUER: airflow
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-apiserver:8080/execution/
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+    FOOTBALL_SOURCE: football_data
+    FOOTBALL_SEASONS: '2026'
+    DB_HOST: ${DB_HOST:?Set the approved private RDS endpoint}
+    DB_USER: ${DB_USER:?Set the least-privileged application user}
+    DB_PASSWORD: ${DB_PASSWORD:?Set the private application password}
+    DB_NAME: soccer_db
+    DB_PORT: ${DB_PORT:-3306}
+    FOOTBALL_DATA_API_KEY: ${FOOTBALL_DATA_API_KEY:?Set the private API token}
+    PIPELINE_RAW_S3_BUCKET: ${PIPELINE_RAW_S3_BUCKET:?Set the protected raw bucket}
+    PIPELINE_S3_EXPECTED_OWNER: ${PIPELINE_S3_EXPECTED_OWNER:?Set the bucket account}
+    PIPELINE_RAW_S3_PREFIX: raw
+    DB_SSL_MODE: VERIFY_IDENTITY
+    DB_SSL_CA: /opt/soccer/certs/global-bundle.pem
+    HISTORICAL_DATA_DIR: /opt/soccer/historical-data
+    PIPELINE_STAGING_DIR: /opt/soccer/data/staging
+    PYTHONPATH: /opt/soccer
+    AIRFLOW__CELERY__WORKER_CONCURRENCY: '2'
+  volumes:
+    - staging:/opt/soccer/data
+    - task-logs:/opt/airflow/logs
+  user: '50000:0'
+  restart: unless-stopped
+  logging: &cloud-logging
+    driver: awslogs
+    options: &cloud-log-options
+      awslogs-region: ${AWS_REGION:?Set AWS_REGION}
+      awslogs-group: ${PIPELINE_LOG_GROUP:?Set existing CloudWatch log group}
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_POSTGRES_PASSWORD:?Set private metadata password}
+    volumes: [metadata:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, pg_isready, -U, airflow]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis:
+    image: redis:7.2-bookworm
+    command: [redis-server, --requirepass, '${AIRFLOW_REDIS_PASSWORD:?Set private broker password}']
+    environment:
+      REDISCLI_AUTH: ${AIRFLOW_REDIS_PASSWORD:?Set private broker password}
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  airflow-apiserver:
+    <<: *airflow-common
+    logging:
+      <<: *cloud-logging
+      options:
+        <<: *cloud-log-options
+        awslogs-stream: ${LOG_STREAM_PREFIX:?Set a unique host/image prefix}-airflow-apiserver
+    command: api-server
+    ports: ['127.0.0.1:8080:8080']
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8080/api/v2/monitor/health]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+  airflow-scheduler:
+    <<: *airflow-common
+    logging:
+      <<: *cloud-logging
+      options:
+        <<: *cloud-log-options
+        awslogs-stream: ${LOG_STREAM_PREFIX:?Set a unique host/image prefix}-airflow-scheduler
+    command: scheduler
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8974/health]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+  airflow-dag-processor:
+    <<: *airflow-common
+    logging:
+      <<: *cloud-logging
+      options:
+        <<: *cloud-log-options
+        awslogs-stream: ${LOG_STREAM_PREFIX:?Set a unique host/image prefix}-airflow-dag-processor
+    command: dag-processor
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+  airflow-worker:
+    <<: *airflow-common
+    logging:
+      <<: *cloud-logging
+      options:
+        <<: *cloud-log-options
+        awslogs-stream: ${LOG_STREAM_PREFIX:?Set a unique host/image prefix}-airflow-worker
+    command: celery worker
+    healthcheck:
+      test: [CMD-SHELL, 'celery --app airflow.providers.celery.executors.celery_executor.app inspect ping -d "celery@$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+  airflow-triggerer:
+    <<: *airflow-common
+    logging:
+      <<: *cloud-logging
+      options:
+        <<: *cloud-log-options
+        awslogs-stream: ${LOG_STREAM_PREFIX:?Set a unique host/image prefix}-airflow-triggerer
+    command: triggerer
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type TriggererJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 10
+volumes:
+  metadata:
+  staging:
+  task-logs:

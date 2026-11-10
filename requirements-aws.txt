@@ -1,0 +1,4 @@
+-r requirements-airflow.txt
+# Optional cloud runtime; ordinary local ETL does not import the AWS SDK.
+boto3>=1.40,<2
+cryptography>=44,<50

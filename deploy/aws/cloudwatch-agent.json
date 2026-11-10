@@ -1,0 +1,39 @@
+{
+  "agent": {
+    "run_as_user": "root"
+  },
+  "logs": {
+    "force_flush_interval": 5,
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/lib/docker/volumes/premier-league-cloud_task-logs/_data/dag_id=premier_league_etl/run_id=*/task_id=extract_matches/attempt=*.log",
+            "log_group_name": "REPLACE_WITH_STACK_LOG_GROUP",
+            "log_stream_name": "{instance_id}-extract_matches"
+          },
+          {
+            "file_path": "/var/lib/docker/volumes/premier-league-cloud_task-logs/_data/dag_id=premier_league_etl/run_id=*/task_id=extract_teams_and_venues/attempt=*.log",
+            "log_group_name": "REPLACE_WITH_STACK_LOG_GROUP",
+            "log_stream_name": "{instance_id}-extract_teams_and_venues"
+          },
+          {
+            "file_path": "/var/lib/docker/volumes/premier-league-cloud_task-logs/_data/dag_id=premier_league_etl/run_id=*/task_id=load_teams_and_venues/attempt=*.log",
+            "log_group_name": "REPLACE_WITH_STACK_LOG_GROUP",
+            "log_stream_name": "{instance_id}-load_teams_and_venues"
+          },
+          {
+            "file_path": "/var/lib/docker/volumes/premier-league-cloud_task-logs/_data/dag_id=premier_league_etl/run_id=*/task_id=load_matches/attempt=*.log",
+            "log_group_name": "REPLACE_WITH_STACK_LOG_GROUP",
+            "log_stream_name": "{instance_id}-load_matches"
+          },
+          {
+            "file_path": "/var/lib/docker/volumes/premier-league-cloud_task-logs/_data/dag_id=premier_league_etl/run_id=*/task_id=validate_data_quality/attempt=*.log",
+            "log_group_name": "REPLACE_WITH_STACK_LOG_GROUP",
+            "log_stream_name": "{instance_id}-validate_data_quality"
+          }
+        ]
+      }
+    }
+  }
+}

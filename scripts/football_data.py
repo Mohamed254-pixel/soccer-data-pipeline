@@ -60,6 +60,8 @@ class Client:
                 raise ValueError('Invalid provider rate-limit header.') from None
             if exhausted:
                 self.next_call = max(self.next_call, monotonic() + reset_delay(response.headers))
+        from raw_storage import archive_response
+        archive_response(ids.FD, endpoint, params, payload)
         return payload
 
 

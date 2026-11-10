@@ -130,6 +130,8 @@ def request_payload(endpoint, params):
                 category = label
                 break
         raise APIResponseError(category)
+    from raw_storage import archive_response
+    archive_response(source_ids.API, endpoint, params, payload)
     return payload
 
 
