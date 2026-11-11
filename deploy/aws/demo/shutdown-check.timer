@@ -1,0 +1,11 @@
+[Unit]
+Description=Check the Premier League demo stop deadline
+
+[Timer]
+OnBootSec=2s
+OnUnitActiveSec=15s
+AccuracySec=1s
+Unit=premier-league-demo-shutdown.service
+
+[Install]
+WantedBy=timers.target

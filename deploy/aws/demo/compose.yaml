@@ -1,0 +1,156 @@
+name: premier-league-aws-demo
+
+x-logging: &logging
+  driver: local
+  options: {max-size: "5m", max-file: "2"}
+
+x-airflow: &airflow
+  image: ${DEMO_IMAGE:?Set the reviewed demo image}
+  user: '50000:0'
+  environment: &airflow-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__PARALLELISM: '1'
+    AIRFLOW__API__WORKERS: '1'
+    AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG: '1'
+    AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: '1'
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${DEMO_METADATA_PASSWORD:?Set metadata password}@postgres/airflow
+    AIRFLOW__CORE__FERNET_KEY: ${DEMO_FERNET_KEY:?Set Fernet key}
+    AIRFLOW__API_AUTH__JWT_SECRET: ${DEMO_JWT_SECRET:?Set JWT secret}
+    AIRFLOW__API_AUTH__JWT_ISSUER: airflow
+    AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
+    AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
+  volumes:
+    - task-logs:/opt/airflow/logs
+  logging: *logging
+  networks: [metadata]
+  depends_on:
+    postgres: {condition: service_healthy}
+  stop_grace_period: 30s
+
+services:
+  postgres:
+    image: ${DEMO_POSTGRES_IMAGE:?Set reviewed PostgreSQL image}
+    command: [postgres, -c, shared_buffers=64MB, -c, max_connections=40]
+    mem_limit: 256m
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_DB: airflow
+      POSTGRES_PASSWORD: ${DEMO_METADATA_PASSWORD:?Set metadata password}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    networks: [metadata]
+    logging: *logging
+    healthcheck:
+      test: [CMD, pg_isready, -U, airflow]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+  mysql:
+    image: ${DEMO_MYSQL_IMAGE:?Set reviewed MySQL 8.4 image}
+    command: [--require-secure-transport=ON, --innodb-buffer-pool-size=128M, --max-connections=20, --performance-schema=OFF, --skip-log-bin]
+    mem_limit: 640m
+    environment:
+      MYSQL_DATABASE: soccer_db
+      MYSQL_ROOT_HOST: localhost
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/demo_root
+    secrets: [demo_root, demo_app, demo_bootstrap]
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-users.sh:/docker-entrypoint-initdb.d/10-demo-users.sh:ro
+    networks: [data]
+    logging: *logging
+    healthcheck:
+      test: [CMD, mysqladmin, --protocol=tcp, --ssl-mode=REQUIRED, --host=127.0.0.1, ping, --silent]
+      interval: 5s
+      timeout: 4s
+      retries: 24
+    stop_grace_period: 45s
+  airflow-api:
+    <<: *airflow
+    command: api-server
+    mem_limit: 640m
+    networks: [metadata, ui]
+    ports: ['127.0.0.1:18080:8080']
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8080/api/v2/monitor/health]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  airflow-processor:
+    <<: *airflow
+    command: dag-processor
+    mem_limit: 512m
+    healthcheck:
+      test: [CMD-SHELL, 'airflow jobs check --job-type DagProcessorJob --hostname "$${HOSTNAME}"']
+      interval: 30s
+      timeout: 10s
+      retries: 6
+  airflow-scheduler:
+    <<: *airflow
+    command: scheduler
+    mem_limit: 1152m
+    networks:
+      metadata:
+      data:
+      egress:
+        ipv4_address: 172.29.79.2
+    environment:
+      <<: *airflow-env
+      DB_HOST: mysql
+      DB_NAME: soccer_db
+      DB_USER: demo_app
+      DB_PASSWORD: ${DEMO_APP_PASSWORD:?Set demo application password}
+      FOOTBALL_SOURCE: football_data
+      FOOTBALL_SEASONS: '2026'
+      FOOTBALL_DATA_API_KEY: ${DEMO_FOOTBALL_TOKEN:?Set the approved token}
+      AWS_REGION: us-east-2
+      AWS_DEFAULT_REGION: us-east-2
+      PIPELINE_RAW_S3_BUCKET: ${DEMO_RAW_BUCKET:?Set demo stack bucket}
+      PIPELINE_S3_EXPECTED_OWNER: ${DEMO_AWS_ACCOUNT_ID:?Set the verified archive account}
+      PIPELINE_RAW_S3_PREFIX: raw
+      PIPELINE_STAGING_DIR: /opt/soccer/data/staging
+    volumes:
+      - task-logs:/opt/airflow/logs
+      - staging:/opt/soccer/data
+    depends_on:
+      postgres: {condition: service_healthy}
+      mysql: {condition: service_healthy}
+      airflow-api: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, --fail, http://localhost:8974/health]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+  bootstrap:
+    <<: *airflow
+    profiles: [setup]
+    mem_limit: 640m
+    command: [python, /opt/soccer/bootstrap.py]
+    networks: [data]
+    environment: {DB_HOST: mysql, DB_NAME: soccer_db, DB_USER: demo_bootstrap}
+    secrets: [demo_bootstrap]
+    depends_on:
+      mysql: {condition: service_healthy}
+
+volumes:
+  postgres-data:
+  mysql-data:
+  task-logs:
+  staging:
+
+networks:
+  metadata: {internal: true}
+  data: {internal: true}
+  ui:
+  egress:
+    driver_opts:
+      com.docker.network.bridge.name: pldemo-egress
+    ipam:
+      config: [{subnet: 172.29.79.0/28}]
+
+secrets:
+  demo_root: {file: '${DEMO_PRIVATE_DIR:?Set private runtime directory}/mysql-root'}
+  demo_app: {file: '${DEMO_PRIVATE_DIR:?Set private runtime directory}/mysql-app'}
+  demo_bootstrap: {file: '${DEMO_PRIVATE_DIR:?Set private runtime directory}/mysql-bootstrap'}

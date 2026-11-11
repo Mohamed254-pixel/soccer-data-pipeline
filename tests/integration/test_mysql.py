@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
+import runpy
 from uuid import uuid4
 
 import mysql.connector
@@ -31,7 +32,7 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.fixture
-def mysql_database(monkeypatch):
+def mysql_database(monkeypatch, request):
     options = {"user": "root", "password": os.getenv("PIPELINE_TEST_MYSQL_PASSWORD", "")}
     if os.getenv("PIPELINE_TEST_MYSQL_SOCKET"):
         options["unix_socket"] = os.environ["PIPELINE_TEST_MYSQL_SOCKET"]
@@ -44,15 +45,16 @@ def mysql_database(monkeypatch):
     cursor.close()
     connection = CONNECT(**options, database=name)
     cursor = connection.cursor(dictionary=True)
-    for statement in migration.statements(ROOT / "sql/schema.sql"):
-        text = statement.strip().upper()
-        if text.startswith(("CREATE DATABASE", "USE ")):
-            continue
-        cursor.execute(statement)
-    cursor.executemany(VENUE_UPSERT_SQL, prepare_venue_rows(pd.read_csv(ROOT / "data/venues.csv")))
-    cursor.executemany(TEAM_UPSERT_SQL, prepare_team_rows(pd.read_csv(ROOT / "data/teams.csv")))
-    cursor.executemany(UPSERT_SQL, prepare_rows(pd.read_csv(ROOT / "data/live_matches.csv")))
-    connection.commit()
+    if getattr(request, "param", None) != "empty":
+        for statement in migration.statements(ROOT / "sql/schema.sql"):
+            text = statement.strip().upper()
+            if text.startswith(("CREATE DATABASE", "USE ")):
+                continue
+            cursor.execute(statement)
+        cursor.executemany(VENUE_UPSERT_SQL, prepare_venue_rows(pd.read_csv(ROOT / "data/venues.csv")))
+        cursor.executemany(TEAM_UPSERT_SQL, prepare_team_rows(pd.read_csv(ROOT / "data/teams.csv")))
+        cursor.executemany(UPSERT_SQL, prepare_rows(pd.read_csv(ROOT / "data/live_matches.csv")))
+        connection.commit()
     monkeypatch.setattr(store, "get_connection", lambda: CONNECT(**options, database=name))
     try:
         yield connection, cursor
@@ -581,3 +583,30 @@ def test_registry_reapply_rejects_weakened_check_with_same_name(mysql_database):
     connection.commit()
     with pytest.raises(ValueError,match='CHECK constraint expression'):
         migrate_sources.apply(connection,cursor)
+
+
+@pytest.mark.parametrize("mysql_database", ["empty"], indirect=True)
+def test_aws_demo_bootstrap_seeds_and_validates_archive(mysql_database, monkeypatch):
+    import db
+    import load_live_matches
+    import load_teams
+    import migrate_sources
+
+    connection, cursor = mysql_database
+    # The fixture's socket/host and random schema are the only test endpoints.
+    def connect():
+        return store.get_connection()
+
+    for module in (db, load_live_matches, load_teams):
+        monkeypatch.setattr(module, "get_connection", connect)
+    monkeypatch.setattr(load_teams, "TEAMS_PATH", load_teams.TEAMS_PATH)
+    monkeypatch.setattr(load_teams, "VENUES_PATH", load_teams.VENUES_PATH)
+    monkeypatch.setattr(load_live_matches, "INPUT_PATH", load_live_matches.INPUT_PATH)
+    bootstrap = runpy.run_path(str(ROOT / "deploy/aws/demo/bootstrap.py"))
+    bootstrap["seed"](ROOT / "sql/schema.sql", ROOT / "data")
+    store.assert_historical_snapshot(cursor, ROOT)
+    migrate_sources.verify_registry(cursor)
+    cursor.execute("SELECT COUNT(*) AS total FROM live_matches WHERE season=2024")
+    assert cursor.fetchone()["total"] == 380
+    with pytest.raises(RuntimeError, match="Expected an empty demo database"):
+        bootstrap["seed"](ROOT / "sql/schema.sql", ROOT / "data")

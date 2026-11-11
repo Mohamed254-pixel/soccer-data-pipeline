@@ -1,4 +1,7 @@
-# Phase 3 AWS deployment candidate
+# Phase 3 EC2 and RDS candidate
+
+The separately deployed [isolated EC2 demo](demo/README.md) runs MySQL on the
+EC2 host. This document describes the original EC2 and private RDS candidate.
 
 **Status: prepared locally, not deployed.** There is no verified AWS account or
 region in this workspace. Budget and infrastructure approval are pending.
