@@ -1,0 +1,7 @@
+[Unit]
+Description=Enforce the Premier League demo stop deadline
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/sbin/premier-league-demo-shutdown

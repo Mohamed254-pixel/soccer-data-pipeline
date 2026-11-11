@@ -1,6 +1,12 @@
 # Premier League Data Engineering Pipeline — Architecture
 
-The merged implementation has verified migrations, healthy local services, a real season-2026 bootstrap and [one successful incremental repeat](phase2-repeat-results.md). The DAG remains paused; weekly scheduling is pending approval. The runtime selects football-data.org for season 2026, while the code retains API-FOOTBALL as its compatibility default. Both supervised runs used the deployed runner, not Airflow DAG task execution.
+The local Phase 2 deployment completed its bootstrap, incremental repeat and
+[approved scheduler activation](phase2-scheduling-results.md). That dated report
+records a successful five-task scheduler-created run; present health must be
+checked rather than inferred from that report. Phase 3's separate
+[AWS candidate](../deploy/aws/README.md) is under development and is not deployed.
+The runtime selects football-data.org for season 2026; API-FOOTBALL remains the
+compatibility default in code.
 
 ## Scope
 

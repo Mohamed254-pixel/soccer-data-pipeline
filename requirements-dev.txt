@@ -1,2 +1,5 @@
--r requirements-airflow.txt
+-r requirements-aws.txt
 pytest>=8.3,<9
+
+# Cloud SDK is exercised with botocore Stubber; never needs AWS credentials.
+-r requirements-aws.txt

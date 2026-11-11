@@ -10,6 +10,20 @@ permissions:
   contents: read
 
 jobs:
+  aws-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install infrastructure validator
+        run: python -m pip install 'cfn-lint>=1.60,<2'
+      - name: Validate AWS templates without deploying
+        run: |
+          cfn-lint deploy/aws/infrastructure.json
+          cfn-lint -r us-east-2 -t deploy/aws/demo/infrastructure.json
+
   airflow-import:
     runs-on: ubuntu-latest
     steps:
@@ -67,4 +81,34 @@ jobs:
       - name: Install test dependencies
         run: python -m pip install -r requirements-dev.txt
       - name: Run full suite with MySQL 8.0 integration tests
+        run: python -m pytest
+
+  mysql84-integration:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          # Disposable CI database only. No application credentials or API keys.
+          MYSQL_ROOT_PASSWORD: integration-test-only
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      PIPELINE_TEST_MYSQL_HOST: 127.0.0.1
+      PIPELINE_TEST_MYSQL_PASSWORD: integration-test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run full suite with MySQL 8.4 integration tests
         run: python -m pytest

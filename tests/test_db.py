@@ -38,3 +38,32 @@ def test_invalid_port_range_never_connects(monkeypatch, port):
     with pytest.raises(RuntimeError, match="between 1 and 65535"):
         db.get_connection()
     connect.assert_not_called()
+
+
+def test_verified_tls_and_missing_ca_fail_closed(monkeypatch, tmp_path):
+    for key in ('DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'):
+        monkeypatch.setenv(key, 'test-only')
+    monkeypatch.setenv('DB_SSL_MODE', 'VERIFY_IDENTITY')
+    connect = Mock()
+    monkeypatch.setattr(db.mysql.connector, 'connect', connect)
+    with pytest.raises(RuntimeError, match='CA bundle'):
+        db.get_connection()
+    connect.assert_not_called()
+    ca = tmp_path / 'ca.pem'
+    ca.write_text('test-only-certificate')
+    monkeypatch.setenv('DB_SSL_CA', str(ca))
+    db.get_connection()
+    args = connect.call_args.kwargs
+    assert args['ssl_verify_cert'] and args['ssl_verify_identity'] and not args['ssl_disabled']
+    assert args['ssl_ca'] == str(ca) and args['tls_versions'] == ['TLSv1.2', 'TLSv1.3']
+
+
+def test_invalid_tls_mode_never_connects(monkeypatch):
+    for key in ('DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'):
+        monkeypatch.setenv(key, 'test-only')
+    monkeypatch.setenv('DB_SSL_MODE', 'DISABLED')
+    connect = Mock()
+    monkeypatch.setattr(db.mysql.connector, 'connect', connect)
+    with pytest.raises(RuntimeError, match='DB_SSL_MODE'):
+        db.get_connection()
+    connect.assert_not_called()

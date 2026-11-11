@@ -1,0 +1,431 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Isolated 32-hour Premier League demo in Ohio. User data installs only a stop timer.",
+  "Parameters": {
+    "ReviewedAmi": {
+      "Type": "AWS::EC2::Image::Id",
+      "Description": "Reviewed Ohio x86_64 AL2023 AMI ID"
+    },
+    "AvailabilityZone": {
+      "Type": "AWS::EC2::AvailabilityZone::Name",
+      "AllowedPattern": "us-east-2[a-z]"
+    },
+    "ApprovedStopEpoch": {
+      "Type": "String",
+      "AllowedPattern": "[1-9][0-9]{9}",
+      "Description": "Approved absolute UTC stop deadline as Unix seconds"
+    }
+  },
+  "Resources": {
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.78.0.0/16",
+        "EnableDnsSupport": true,
+        "EnableDnsHostnames": true,
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "premier-league-data-pipeline"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "isolated-demo"
+          },
+          {
+            "Key": "StopEpochUTC",
+            "Value": {
+              "Ref": "ApprovedStopEpoch"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {}
+    },
+    "GatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "ComputeSubnet": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "CidrBlock": "10.78.0.0/24",
+        "AvailabilityZone": {
+          "Ref": "AvailabilityZone"
+        },
+        "MapPublicIpOnLaunch": true
+      }
+    },
+    "PublicRoutes": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "InternetRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "PublicRoutes"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "InternetGateway"
+        }
+      },
+      "DependsOn": "GatewayAttachment"
+    },
+    "PublicRouteAssociation": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "ComputeSubnet"
+        },
+        "RouteTableId": {
+          "Ref": "PublicRoutes"
+        }
+      }
+    },
+    "HostSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "SSM-only host: no inbound ports",
+        "VpcId": {
+          "Ref": "Vpc"
+        },
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 443,
+            "ToPort": 443,
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "Archive": {
+      "Type": "AWS::S3::Bucket",
+      "Properties": {
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "IgnorePublicAcls": true,
+          "BlockPublicPolicy": true,
+          "RestrictPublicBuckets": true
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "AbortIncompleteUploads",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 7
+              }
+            },
+            {
+              "Id": "ExpireDemoArchive",
+              "Status": "Enabled",
+              "Prefix": "raw/",
+              "ExpirationInDays": 30,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 7
+              }
+            },
+            {
+              "Id": "RemoveExpiredDemoMarkers",
+              "Status": "Enabled",
+              "Prefix": "raw/",
+              "ExpiredObjectDeleteMarker": true
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "premier-league-data-pipeline"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "isolated-demo"
+          },
+          {
+            "Key": "StopEpochUTC",
+            "Value": {
+              "Ref": "ApprovedStopEpoch"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "ArchivePolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Archive"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Archive",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Archive.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            },
+            {
+              "Sid": "RequireConditionalArchivePut",
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${Archive.Arn}/raw/*"
+              },
+              "Condition": {
+                "StringNotEquals": {
+                  "s3:if-none-match": "*"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "RuntimeSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Description": "Demo-only runtime secrets. Populate only after approved setup.",
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}/demo-runtime"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "premier-league-data-pipeline"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "isolated-demo"
+          },
+          {
+            "Key": "StopEpochUTC",
+            "Value": {
+              "Ref": "ApprovedStopEpoch"
+            }
+          }
+        ]
+      },
+      "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain"
+    },
+    "HostRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "ec2.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          {
+            "Fn::Sub": "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
+          }
+        ],
+        "Policies": [
+          {
+            "PolicyName": "PipelineRuntime",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${Archive.Arn}/raw/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "secretsmanager:GetSecretValue"
+                  ],
+                  "Resource": {
+                    "Ref": "RuntimeSecret"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "HostProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [
+          {
+            "Ref": "HostRole"
+          }
+        ]
+      }
+    },
+    "AirflowHost": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {
+          "Ref": "ReviewedAmi"
+        },
+        "InstanceType": "c7i-flex.large",
+        "IamInstanceProfile": {
+          "Ref": "HostProfile"
+        },
+        "SubnetId": {
+          "Ref": "ComputeSubnet"
+        },
+        "SecurityGroupIds": [
+          {
+            "Ref": "HostSecurityGroup"
+          }
+        ],
+        "MetadataOptions": {
+          "HttpTokens": "required",
+          "HttpEndpoint": "enabled",
+          "HttpPutResponseHopLimit": 2,
+          "HttpProtocolIpv6": "disabled"
+        },
+        "BlockDeviceMappings": [
+          {
+            "DeviceName": "/dev/xvda",
+            "Ebs": {
+              "VolumeSize": 20,
+              "VolumeType": "gp3",
+              "Encrypted": true,
+              "DeleteOnTermination": true
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "${AWS::StackName}-airflow"
+            }
+          },
+          {
+            "Key": "Project",
+            "Value": "premier-league-data-pipeline"
+          },
+          {
+            "Key": "Purpose",
+            "Value": "isolated-demo"
+          },
+          {
+            "Key": "StopEpochUTC",
+            "Value": {
+              "Ref": "ApprovedStopEpoch"
+            }
+          }
+        ],
+        "InstanceInitiatedShutdownBehavior": "stop",
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\nset -euo pipefail\ninstall -d -m 0755 /etc/premier-league-demo\nnow=$(date -u +%s)\nmaximum=$((now + 115140))\napproved=",
+                {
+                  "Ref": "ApprovedStopEpoch"
+                },
+                "\nif (( approved < maximum )); then maximum=$approved; fi\nprintf '%s\\n' \"$maximum\" > /etc/premier-league-demo/deadline\n",
+                "cat > /usr/local/sbin/premier-league-demo-shutdown <<'DEMO_FILE'\n#!/usr/bin/env bash\nset -euo pipefail\n\ndeadline_file=${1:-/etc/premier-league-demo/deadline}\n# Fail closed if the approved deadline was lost or corrupted.\ndeadline=$(cat \"$deadline_file\" 2>/dev/null || true)\nnow=$(date -u +%s)\nif [[ ! $deadline =~ ^[1-9][0-9]{9}$ ]] || (( now >= deadline )); then\n    systemctl --no-block poweroff\nfi\nDEMO_FILE\n",
+                "cat > /etc/systemd/system/premier-league-demo-shutdown.service <<'DEMO_FILE'\n[Unit]\nDescription=Enforce the Premier League demo stop deadline\n\n[Service]\nType=oneshot\nEnvironment=PATH=/usr/sbin:/usr/bin:/sbin:/bin\nExecStart=/usr/local/sbin/premier-league-demo-shutdown\nDEMO_FILE\n",
+                "cat > /etc/systemd/system/premier-league-demo-shutdown.timer <<'DEMO_FILE'\n[Unit]\nDescription=Check the Premier League demo stop deadline\n\n[Timer]\nOnBootSec=2s\nOnUnitActiveSec=15s\nAccuracySec=1s\nUnit=premier-league-demo-shutdown.service\n\n[Install]\nWantedBy=timers.target\nDEMO_FILE\n",
+                "chmod 0755 /usr/local/sbin/premier-league-demo-shutdown\nsystemctl daemon-reload\nsystemctl enable --now premier-league-demo-shutdown.timer\n"
+              ]
+            ]
+          }
+        }
+      },
+      "DependsOn": [
+        "InternetRoute",
+        "PublicRouteAssociation"
+      ]
+    }
+  },
+  "Outputs": {
+    "InstanceId": {
+      "Value": {
+        "Ref": "AirflowHost"
+      }
+    },
+    "ArchiveBucket": {
+      "Value": {
+        "Ref": "Archive"
+      }
+    },
+    "RuntimeSecretArn": {
+      "Value": {
+        "Ref": "RuntimeSecret"
+      }
+    }
+  }
+}
