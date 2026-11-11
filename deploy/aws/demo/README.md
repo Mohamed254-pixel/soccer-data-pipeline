@@ -6,7 +6,11 @@ reuses the current five tasks and quality checks. The demo DAG has ID
 The existing local DAG, scheduling, MySQL, and Compose project are separate.
 CloudFormation deployment and staged startup completed. See the
 [verified AWS baseline](../../../docs/portfolio/phase3/README.md) for results.
-Live ingestion and repeat-run validation are pending.
+The first successful live five-stage ingestion completed on November 11, 2026.
+It loaded 380 unique 2026–27 fixtures and archived the matches and teams
+responses. One supervised repeat run reprocessed the 30 fixtures in the
+normal incremental window without inserting duplicates or changing fixture
+business values. See the [verified AWS evidence](../../../docs/portfolio/phase3/README.md).
 
 ## Exact proposed infrastructure
 
@@ -112,7 +116,10 @@ integration with a mocked provider. Ohio CloudFormation lint and offline
 Compose parsing passed. Airflow 3.3.1 imported the generated DAG and confirmed
 its null timetable and exact five-task chain. This leaves MySQL 8.4 container startup, the x86
 image build, actual container resource fit and live systemd/EC2 behavior
-unverified.
+unverified. The deployed AWS workload was subsequently measured during both
+successful ingestions; refer to the evidence report for observed capacity and
+post-run health. Following evidence collection, the instance was verified
+stopped; verify its state and cutoff before any later restart.
 
 ## After approval
 
@@ -166,6 +173,8 @@ unverified.
    demo config --quiet
    demo up -d --wait mysql postgres
    demo --profile setup run --rm bootstrap
+   demo --profile setup run --rm staging-permissions
+   demo --profile setup run --rm staging-check
    demo exec -T mysql bash -ec '
      export MYSQL_PWD="$(cat /run/secrets/demo_root)"
      mysql --protocol=socket -uroot -e "DROP USER IF EXISTS '\''demo_bootstrap'\''@'\''%'\''"
@@ -176,6 +185,12 @@ unverified.
    demo up -d --wait airflow-api airflow-processor airflow-scheduler
    bash deploy/aws/demo/check-capacity.sh running
    ```
+
+   The one-shot staging setup owns only `/opt/soccer/data/staging` as
+   `50000:0` with mode `0750`; it does not recurse over existing staged files.
+   Its setup container has no network, a read-only root filesystem, and only
+   the `CHOWN` and `FOWNER` capabilities. The separate write check runs as the
+   Airflow UID `50000:0` with no capabilities before the scheduler starts.
 
    Enter the unique UI password at the private prompt. Verify MySQL root is
    localhost-only, the bootstrap account is gone and the app cannot perform

@@ -97,3 +97,26 @@ def test_private_runtime_does_not_overwrite(tmp_path, monkeypatch):
     monkeypatch.setenv("AWS_PROFILE", "production")
     monkeypatch.setattr(subprocess, "call", capture)
     assert runtime["run_compose"](folder, ["config", "--quiet"]) == 0
+
+
+def test_staging_permissions_are_narrow_and_writable_by_airflow(tmp_path):
+    helper = runpy.run_path(str(DEMO / "staging_permissions.py"))
+    staging = tmp_path / "data" / "staging"
+    sentinel = tmp_path / "data" / "existing.json"
+    sentinel.parent.mkdir()
+    sentinel.write_text("keep")
+
+    uid, gid = os.getuid(), os.getgid()
+    helper["prepare"](staging, uid=uid, gid=gid)
+    helper["verify"](staging, uid=uid, gid=gid, check_write=True)
+    assert staging.stat().st_mode & 0o777 == 0o750
+    assert sentinel.read_text() == "keep"
+    assert list(staging.iterdir()) == []
+
+    compose = (DEMO / "compose.yaml").read_text()
+    assert "staging-permissions:" in compose and "staging-check:" in compose
+    assert "cap_drop: [ALL]" in compose
+    assert "cap_add: [CHOWN, FOWNER]" in compose
+    assert "network_mode: none" in compose
+    assert "user: '50000:0'" in compose
+    assert "chmod 777" not in compose and "chmod 777" not in (DEMO / "staging_permissions.py").read_text()

@@ -133,6 +133,35 @@ services:
     secrets: [demo_bootstrap]
     depends_on:
       mysql: {condition: service_healthy}
+  staging-permissions:
+    image: ${DEMO_IMAGE:?Set the reviewed demo image}
+    profiles: [setup]
+    user: '0:0'
+    entrypoint: [python, /opt/soccer/staging_permissions.py, prepare]
+    environment: {PYTHONDONTWRITEBYTECODE: '1'}
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [CHOWN, FOWNER]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    restart: 'no'
+    mem_limit: 128m
+    volumes: [staging:/opt/soccer/data]
+    logging: *logging
+  staging-check:
+    image: ${DEMO_IMAGE:?Set the reviewed demo image}
+    profiles: [setup]
+    user: '50000:0'
+    entrypoint: [python, /opt/soccer/staging_permissions.py, check]
+    environment: {PYTHONDONTWRITEBYTECODE: '1'}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    network_mode: none
+    restart: 'no'
+    mem_limit: 128m
+    volumes: [staging:/opt/soccer/data]
+    logging: *logging
 
 volumes:
   postgres-data:
